@@ -71,7 +71,7 @@ class GRASS_LIB_EXPORT QgsGrassObject
 {
   public:
     //! Element type
-    enum Type { None, Raster, Vector, Region };
+    enum Type { None, Raster, Group, Vector, Region };
 
     QgsGrassObject() : mType( None ) {}
     QgsGrassObject( const QString& gisdbase, const QString& location = QString::null,
@@ -220,8 +220,13 @@ class QgsGrass
     static GRASS_LIB_EXPORT QStringList vectors( const QString& mapsetPath );
 
     static GRASS_LIB_EXPORT QStringList rasters( const QString& gisdbase, const QString& locationName,
-        const QString& mapsetNamee );
+        const QString& mapsetName );
     static GRASS_LIB_EXPORT QStringList rasters( const QString& mapsetPath );
+
+    // imagery groups
+    static GRASS_LIB_EXPORT QStringList groups( const QString& gisdbase, const QString& locationName,
+        const QString& mapsetName );
+    static GRASS_LIB_EXPORT QStringList groups( const QString& mapsetPath );
 
     //! Get list of vector layers
     static GRASS_LIB_EXPORT QStringList vectorLayers( const QString& gisdbase, const QString& location,
@@ -383,6 +388,9 @@ class QgsGrass
     /** Insert row to table. Throws  QgsGrass::Exception */
     static GRASS_LIB_EXPORT void insertRow( dbDriver *driver, const QString tableName,
                                             const QgsAttributes& attributes );
+
+    /** Returns true if object is link to external data (created by r.external) */
+    static GRASS_LIB_EXPORT bool isExternal( const QgsGrassObject & object );
 
     //! Library version
     static GRASS_LIB_EXPORT int versionMajor();

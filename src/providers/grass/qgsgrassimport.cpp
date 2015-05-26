@@ -32,11 +32,13 @@ extern "C"
 #include <grass/version.h>
 #include <grass/gis.h>
 #include <grass/raster.h>
+#include <grass/imagery.h>
 }
 
 QgsGrassImport::QgsGrassImport( QgsGrassObject grassObject )
     : QObject()
     , mGrassObject( grassObject )
+    , mCanceled( false )
     , mFutureWatcher( 0 )
 {
 }
@@ -132,9 +134,26 @@ bool QgsGrassRasterImport::import()
     return false;
   }
 
+  int redBand = 0;
+  int greenBand = 0;
+  int blueBand = 0;
   for ( int band = 1; band <= provider->bandCount(); band++ )
   {
     QgsDebugMsg( QString( "band = %1" ).arg( band ) );
+    int colorInterpretation = provider->colorInterpretation( band );
+    if ( colorInterpretation ==  QgsRaster::RedBand )
+    {
+      redBand = band;
+    }
+    else if ( colorInterpretation ==  QgsRaster::GreenBand )
+    {
+      greenBand = band;
+    }
+    else if ( colorInterpretation ==  QgsRaster::BlueBand )
+    {
+      blueBand = band;
+    }
+
     QGis::DataType qgis_out_type = QGis::UnknownDataType;
     RASTER_MAP_TYPE data_type = -1;
     switch ( provider->dataType( band ) )
@@ -213,22 +232,34 @@ bool QgsGrassRasterImport::import()
       {
         if ( !block->convert( qgis_out_type ) )
         {
-          setError( "cannot vonvert data type" );
+          setError( tr( "Cannot convert block (%1) to data type %2" ).arg( block->toString() ).arg( qgis_out_type ) );
           delete block;
           return false;
         }
         char * data = block->bits( row, 0 );
         int size = iterCols * block->dataTypeSize();
         QByteArray byteArray = QByteArray::fromRawData( data, size ); // does not copy data and does not take ownership
+        if ( isCanceled() )
+        {
+          outStream << true; // cancel module
+          break;
+        }
+        outStream << false; // not canceled
         outStream << byteArray;
       }
       delete block;
+      if ( isCanceled() )
+      {
+        outStream << true; // cancel module
+        break;
+      }
     }
 
     // TODO: send something back from module and read it here to close map correctly in module
 
     process->closeWriteChannel();
-    process->waitForFinished( 5000 );
+    // TODO: best timeout?
+    process->waitForFinished( 30000 );
 
     QString stdoutString = process->readAllStandardOutput().data();
     QString stderrString = process->readAllStandardError().data();
@@ -254,6 +285,31 @@ bool QgsGrassRasterImport::import()
     }
 
     delete process;
+  }
+  QgsDebugMsg( QString( "redBand = %1 greenBand = %2 blueBand = %3" ).arg( redBand ).arg( greenBand ).arg( blueBand ) );
+  if ( redBand > 0 && greenBand > 0 && blueBand > 0 )
+  {
+    // TODO: check if the group exists
+    // I_find_group()
+    QString name = mGrassObject.name();
+
+    G_TRY
+    {
+      QgsGrass::setMapset( mGrassObject.gisdbase(), mGrassObject.location(), mGrassObject.mapset() );
+      struct Ref ref;
+      I_get_group_ref( name.toUtf8().data(), &ref );
+      QString redName = name + QString( "_%1" ).arg( redBand );
+      QString greenName = name + QString( "_%1" ).arg( greenBand );
+      QString blueName = name + QString( "_%1" ).arg( blueBand );
+      I_add_file_to_group_ref( redName.toUtf8().data(), mGrassObject.mapset().toUtf8().data(), &ref );
+      I_add_file_to_group_ref( greenName.toUtf8().data(), mGrassObject.mapset().toUtf8().data(), &ref );
+      I_add_file_to_group_ref( blueName.toUtf8().data(), mGrassObject.mapset().toUtf8().data(), &ref );
+      I_put_group_ref( name.toUtf8().data(), &ref );
+    }
+    G_CATCH( QgsGrass::Exception &e )
+    {
+      QgsDebugMsg( QString( "Cannot create group: %1" ).arg( e.what() ) );
+    }
   }
   return true;
 }
@@ -387,9 +443,16 @@ bool QgsGrassVectorImport::import()
       {
         feature.geometry()->transform( coordinateTransform );
       }
+      if ( isCanceled() )
+      {
+        outStream << true; // cancel module
+        break;
+      }
+      outStream << false; // not canceled
       outStream << feature;
     }
     feature = QgsFeature(); // indicate end by invalid feature
+    outStream << false; // not canceled
     outStream << feature;
     QgsDebugMsg( "features sent" );
   }
@@ -472,4 +535,53 @@ bool QgsGrassCopy::import()
 QString QgsGrassCopy::srcDescription() const
 {
   return mSrcObject.toString();
+}
+
+//------------------------------ QgsGrassExternal ------------------------------------
+QgsGrassExternal::QgsGrassExternal( const QString& gdalSource, const QgsGrassObject& destObject )
+    : QgsGrassImport( destObject )
+    , mSource( gdalSource )
+{
+}
+
+QgsGrassExternal::~QgsGrassExternal()
+{
+}
+
+bool QgsGrassExternal::import()
+{
+  QgsDebugMsg( "entered" );
+
+  try
+  {
+    QString cmd = "r.external";
+    QStringList arguments;
+
+    if ( QFileInfo( mSource ).exists() )
+    {
+      arguments << "input=" + mSource;
+    }
+    else
+    {
+      arguments << "source=" + mSource;
+    }
+    arguments << "output=" + mGrassObject.name();
+
+    // TODO: best timeout
+    int timeout = -1;
+    // throws QgsGrass::Exception
+    QgsGrass::runModule( mGrassObject.gisdbase(), mGrassObject.location(), mGrassObject.mapset(), cmd, arguments, timeout, false );
+  }
+  catch ( QgsGrass::Exception &e )
+  {
+    setError( e.what() );
+    return false;
+  }
+
+  return true;
+}
+
+QString QgsGrassExternal::srcDescription() const
+{
+  return mSource;
 }

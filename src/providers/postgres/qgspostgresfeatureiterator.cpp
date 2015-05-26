@@ -12,16 +12,18 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+#include "qgsgeometry.h"
+#include "qgspostgresconnpool.h"
+#include "qgspostgresexpressioncompiler.h"
 #include "qgspostgresfeatureiterator.h"
 #include "qgspostgresprovider.h"
-#include "qgspostgresconnpool.h"
 #include "qgspostgrestransaction.h"
-#include "qgsgeometry.h"
 
 #include "qgslogger.h"
 #include "qgsmessagelog.h"
 
 #include <QObject>
+#include <QSettings>
 
 
 const int QgsPostgresFeatureIterator::sFeatureQueueSize = 2000;
@@ -32,6 +34,7 @@ QgsPostgresFeatureIterator::QgsPostgresFeatureIterator( QgsPostgresFeatureSource
     , mFeatureQueueSize( sFeatureQueueSize )
     , mFetched( 0 )
     , mFetchGeometry( false )
+    , mExpressionCompiled( false )
 {
   if ( !source->mTransactionConnection )
   {
@@ -66,6 +69,17 @@ QgsPostgresFeatureIterator::QgsPostgresFeatureIterator( QgsPostgresFeatureSource
   else if ( request.filterType() == QgsFeatureRequest::FilterFids )
   {
     whereClause = QgsPostgresUtils::whereClause( mRequest.filterFids(), mSource->mFields, mConn, mSource->mPrimaryKeyType, mSource->mPrimaryKeyAttrs, mSource->mShared );
+  }
+  else if ( request.filterType() == QgsFeatureRequest::FilterExpression
+            && QSettings().value( "/qgis/postgres/compileExpressions", false ).toBool() )
+  {
+    QgsPostgresExpressionCompiler compiler = QgsPostgresExpressionCompiler( source );
+
+    if ( compiler.compile( request.filterExpression() ) == QgsPostgresExpressionCompiler::Complete )
+    {
+      whereClause = compiler.result();
+      mExpressionCompiled = true;
+    }
   }
 
   if ( !mSource->mSqlWhereClause.isEmpty() )
@@ -151,8 +165,7 @@ bool QgsPostgresFeatureIterator::fetchFeature( QgsFeature& feature )
   }
   else
   {
-    QgsGeometry* featureGeom = mFeatureQueue.front().geometryAndOwnership();
-    feature.setGeometry( featureGeom );
+    feature.setGeometry( mFeatureQueue.front().geometryAndOwnership() );
   }
   feature.setFeatureId( mFeatureQueue.front().id() );
   feature.setAttributes( mFeatureQueue.front().attributes() );
@@ -164,6 +177,14 @@ bool QgsPostgresFeatureIterator::fetchFeature( QgsFeature& feature )
   feature.setFields( mSource->mFields ); // allow name-based attribute lookups
 
   return true;
+}
+
+bool QgsPostgresFeatureIterator::nextFeatureFilterExpression( QgsFeature& f )
+{
+  if ( !mExpressionCompiled )
+    return QgsAbstractFeatureIterator::nextFeatureFilterExpression( f );
+  else
+    return fetchFeature( f );
 }
 
 bool QgsPostgresFeatureIterator::prepareSimplification( const QgsSimplifyMethod& simplifyMethod )
@@ -276,8 +297,9 @@ QString QgsPostgresFeatureIterator::whereClauseRect()
 
   if ( mRequest.flags() & QgsFeatureRequest::ExactIntersect )
   {
-    whereClause += QString( " AND %1(%2%3,%4)" )
+    whereClause += QString( " AND %1(%2(%3%4),%5)" )
                    .arg( mConn->majorVersion() < 2 ? "intersects" : "st_intersects" )
+                   .arg( mConn->majorVersion() < 2 ? "curvetoline" : "st_curvetoline" )
                    .arg( QgsPostgresConn::quotedIdentifier( mSource->mGeometryColumn ) )
                    .arg( castToGeometry ? "::geometry" : "" )
                    .arg( qBox );
@@ -407,6 +429,7 @@ bool QgsPostgresFeatureIterator::declareCursor( const QString& whereClause )
 
   if ( !mConn->openCursor( mCursorName, query ) )
   {
+
     // reloading the fields might help next time around
     // TODO how to cleanly force reload of fields?  P->loadFields();
     close();

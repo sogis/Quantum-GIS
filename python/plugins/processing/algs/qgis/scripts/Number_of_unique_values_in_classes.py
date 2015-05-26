@@ -2,11 +2,7 @@
 ##input=vector
 ##class_field=field input
 ##value_field=field input
-##output=output vector
-
-from PyQt4.Qt import QVariant
-
-from qgis.core import QgsField, QgsFeature
+##N unique values=output vector
 
 layer = processing.getObject(input)
 provider = layer.dataProvider()

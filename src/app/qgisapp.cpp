@@ -195,6 +195,7 @@
 #include "qgssinglebandgrayrenderer.h"
 #include "qgssnappingdialog.h"
 #include "qgssponsors.h"
+#include "qgsstatisticalsummarydockwidget.h"
 #include "qgssvgannotationitem.h"
 #include "qgstextannotationitem.h"
 #include "qgstipgui.h"
@@ -598,6 +599,10 @@ QgisApp::QgisApp( QSplashScreen *splash, bool restorePlugins, QWidget * parent, 
   mAdvancedDigitizingDockWidget = new QgsAdvancedDigitizingDockWidget( mMapCanvas, this );
   mAdvancedDigitizingDockWidget->setObjectName( "AdvancedDigitizingTools" );
 
+  // Statistical Summary dock
+  mStatisticalSummaryDockWidget = new QgsStatisticalSummaryDockWidget( this );
+  mStatisticalSummaryDockWidget->setObjectName( "StatistalSummaryDockWidget" );
+
   mSnappingUtils = new QgsMapCanvasSnappingUtils( mMapCanvas, this );
   mMapCanvas->setSnappingUtils( mSnappingUtils );
   connect( QgsProject::instance(), SIGNAL( snapSettingsChanged() ), mSnappingUtils, SLOT( readConfigFromProject() ) );
@@ -641,6 +646,9 @@ QgisApp::QgisApp( QSplashScreen *splash, bool restorePlugins, QWidget * parent, 
 
   addDockWidget( Qt::LeftDockWidgetArea, mAdvancedDigitizingDockWidget );
   mAdvancedDigitizingDockWidget->hide();
+
+  addDockWidget( Qt::LeftDockWidgetArea, mStatisticalSummaryDockWidget );
+  mStatisticalSummaryDockWidget->hide();
 
   QMainWindow::addDockWidget( Qt::BottomDockWidgetArea, mUserInputDockWidget );
   mUserInputDockWidget->setFloating( true );
@@ -1202,6 +1210,7 @@ void QgisApp::createActions()
   connect( mActionSvgAnnotation, SIGNAL( triggered() ), this, SLOT( addSvgAnnotation() ) );
   connect( mActionAnnotation, SIGNAL( triggered() ), this, SLOT( modifyAnnotation() ) );
   connect( mActionLabeling, SIGNAL( triggered() ), this, SLOT( labeling() ) );
+  connect( mActionStatisticalSummary, SIGNAL( triggered( ) ), this, SLOT( showStatisticsDockWidget() ) );
 
   // Layer Menu Items
 
@@ -6496,6 +6505,7 @@ QgsVectorLayer *QgisApp::pasteToNewMemoryVector()
 void QgisApp::copyStyle( QgsMapLayer * sourceLayer )
 {
   QgsMapLayer *selectionLayer = sourceLayer ? sourceLayer : activeLayer();
+
   if ( selectionLayer )
   {
     QDomImplementation DomImplementation;
@@ -6506,14 +6516,31 @@ void QgisApp::copyStyle( QgsMapLayer * sourceLayer )
     QDomElement rootNode = doc.createElement( "qgis" );
     rootNode.setAttribute( "version", QString( "%1" ).arg( QGis::QGIS_VERSION ) );
     doc.appendChild( rootNode );
+
+    /*
+     * Check to see if the layer is vector - in which case we should also copy its geometryType
+     * to avoid eventually pasting to a layer with a different geometry
+    */
+    if ( selectionLayer->type() == 0 )
+    {
+        //Getting the selectionLayer geometry
+        QgsVectorLayer *SelectionGeometry = static_cast<QgsVectorLayer*>(selectionLayer);
+        QString geoType = QString::number(SelectionGeometry->geometryType());
+
+        //Adding geometryinformation
+        QDomElement layerGeometryType = doc.createElement("layerGeometryType");
+        QDomText type = doc.createTextNode(geoType);
+
+        layerGeometryType.appendChild(type);
+        rootNode.appendChild(layerGeometryType);
+    }
+
     QString errorMsg;
     if ( !selectionLayer->writeSymbology( rootNode, doc, errorMsg ) )
     {
-      QMessageBox::warning( this,
-                            tr( "Error" ),
-                            tr( "Cannot copy style: %1" )
-                            .arg( errorMsg ),
-                            QMessageBox::Ok );
+        messageBar()->pushMessage( errorMsg,
+                                   tr( "Cannot copy style: %1" ),
+                                   QgsMessageBar::CRITICAL, messageTimeout() );
       return;
     }
     // Copies data in text form as well, so the XML can be pasted into a text editor
@@ -6522,9 +6549,14 @@ void QgisApp::copyStyle( QgsMapLayer * sourceLayer )
     mActionPasteStyle->setEnabled( true );
   }
 }
+/**
+   \param destinatioLayer  The layer that the clipboard will be pasted to
+                            (defaults to the active layer on the legend)
+ */
+
 
 void QgisApp::pasteStyle( QgsMapLayer * destinationLayer )
-{
+{    
   QgsMapLayer *selectionLayer = destinationLayer ? destinationLayer : activeLayer();
   if ( selectionLayer )
   {
@@ -6535,24 +6567,35 @@ void QgisApp::pasteStyle( QgsMapLayer * destinationLayer )
       int errorLine, errorColumn;
       if ( !doc.setContent( clipboard()->data( QGSCLIPBOARD_STYLE_MIME ), false, &errorMsg, &errorLine, &errorColumn ) )
       {
-        QMessageBox::information( this,
-                                  tr( "Error" ),
-                                  tr( "Cannot parse style: %1:%2:%3" )
-                                  .arg( errorMsg )
-                                  .arg( errorLine )
-                                  .arg( errorColumn ),
-                                  QMessageBox::Ok );
-        return;
+
+          messageBar()->pushMessage( errorMsg,
+                                     tr( "Cannot parse style: %1:%2:%3" ),
+                                     QgsMessageBar::CRITICAL, messageTimeout() );
+          return;
       }
+
       QDomElement rootNode = doc.firstChildElement( "qgis" );
+
+      //Test for matching geometry type on vector layers when pasting
+      if (selectionLayer->type() == QgsMapLayer::VectorLayer)
+      {
+          QgsVectorLayer *selectionVectorLayer = static_cast<QgsVectorLayer*>(selectionLayer);
+          int pasteLayerGeometryType = doc.elementsByTagName("layerGeometryType").item(0).toElement().text().toInt();
+          if ( selectionVectorLayer->geometryType() != pasteLayerGeometryType )
+          {
+              messageBar()->pushMessage( tr( "Cannot paste style to layer with a different geometry type" ),
+                                         tr( "Your copied style does not match the layer you are pasting to" ),
+                                         QgsMessageBar::INFO, messageTimeout() );
+              return;
+          }
+      }
+
       if ( !selectionLayer->readSymbology( rootNode, errorMsg ) )
       {
-        QMessageBox::information( this,
-                                  tr( "Error" ),
-                                  tr( "Cannot read style: %1" )
-                                  .arg( errorMsg ),
-                                  QMessageBox::Ok );
-        return;
+          messageBar()->pushMessage( errorMsg,
+                                     tr( "Cannot read style: %1" ),
+                                     QgsMessageBar::CRITICAL, messageTimeout() );
+          return;
       }
 
       mLayerTreeView->refreshLayerSymbology( selectionLayer->id() );
@@ -6989,14 +7032,20 @@ void QgisApp::showMouseCoordinate( const QgsPoint & p )
   {
     if ( mMapCanvas->mapUnits() == QGis::Degrees )
     {
+      QgsPoint geo = p;
+      if ( !mMapCanvas->mapSettings().destinationCrs().geographicFlag() )
+      {
+        QgsCoordinateTransform ct( mMapCanvas->mapSettings().destinationCrs(), QgsCoordinateReferenceSystem( GEOSRID ) );
+        geo = ct.transform( p );
+      }
       QString format = QgsProject::instance()->readEntry( "PositionPrecision", "/DegreeFormat", "D" );
 
       if ( format == "DM" )
-        mCoordsEdit->setText( p.toDegreesMinutes( mMousePrecisionDecimalPlaces ) );
+        mCoordsEdit->setText( geo.toDegreesMinutes( mMousePrecisionDecimalPlaces ) );
       else if ( format == "DMS" )
-        mCoordsEdit->setText( p.toDegreesMinutesSeconds( mMousePrecisionDecimalPlaces ) );
+        mCoordsEdit->setText( geo.toDegreesMinutesSeconds( mMousePrecisionDecimalPlaces ) );
       else
-        mCoordsEdit->setText( p.toString( mMousePrecisionDecimalPlaces ) );
+        mCoordsEdit->setText( geo.toString( mMousePrecisionDecimalPlaces ) );
     }
     else
     {
@@ -7704,9 +7753,6 @@ void QgisApp::showOptionsDialog( QWidget *parent, QString currentPage )
 
   if ( optionsDialog->exec() )
   {
-    // set the theme if it changed
-    setTheme( optionsDialog->theme() );
-
     QgsProject::instance()->layerTreeRegistryBridge()->setNewLayersVisible( mySettings.value( "/qgis/new_layers_visible", true ).toBool() );
 
     setupLayerTreeViewFromSettings();
@@ -8083,7 +8129,7 @@ void QgisApp::embedLayers()
 {
   //dialog to select groups/layers from other project files
   QgsProjectLayerGroupDialog d( this );
-  if ( d.exec() == QDialog::Accepted )
+  if ( d.exec() == QDialog::Accepted && d.isValid() )
   {
     mMapCanvas->freeze( true );
 
@@ -10484,6 +10530,12 @@ void QgisApp::osmExportDialog()
 {
   QgsOSMExportDialog dlg;
   dlg.exec();
+}
+
+void QgisApp::showStatisticsDockWidget()
+{
+  mStatisticalSummaryDockWidget->show();
+  mStatisticalSummaryDockWidget->raise();
 }
 
 

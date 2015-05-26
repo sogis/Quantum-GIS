@@ -571,36 +571,7 @@ QGis::GeometryType QgsVectorLayer::geometryType() const
   if ( mDataProvider )
   {
     QGis::WkbType type = mDataProvider->geometryType();
-    switch ( type )
-    {
-      case QGis::WKBPoint:
-      case QGis::WKBPoint25D:
-        return QGis::Point;
-
-      case QGis::WKBLineString:
-      case QGis::WKBLineString25D:
-        return QGis::Line;
-
-      case QGis::WKBPolygon:
-      case QGis::WKBPolygon25D:
-        return QGis::Polygon;
-
-      case QGis::WKBMultiPoint:
-      case QGis::WKBMultiPoint25D:
-        return QGis::Point;
-
-      case QGis::WKBMultiLineString:
-      case QGis::WKBMultiLineString25D:
-        return QGis::Line;
-
-      case QGis::WKBMultiPolygon:
-      case QGis::WKBMultiPolygon25D:
-        return QGis::Polygon;
-
-      case QGis::WKBNoGeometry:
-        return QGis::NoGeometry;
-    }
-    QgsDebugMsg( QString( "Data Provider Geometry type is not recognised, is %1" ).arg( type ) );
+    return ( QGis::GeometryType )( QgsWKBTypes::geometryType(( QgsWKBTypes::Type )type ) );
   }
   else
   {
@@ -3205,9 +3176,12 @@ QList<QVariant> QgsVectorLayer::getValues( const QString &fieldOrExpression, boo
   return values;
 }
 
-QList<double> QgsVectorLayer::getDoubleValues( const QString &fieldOrExpression, bool& ok, bool selectedOnly )
+QList<double> QgsVectorLayer::getDoubleValues( const QString &fieldOrExpression, bool& ok, bool selectedOnly, int* nullCount )
 {
   QList<double> values;
+
+  if ( nullCount )
+    *nullCount = 0;
 
   QList<QVariant> variantValues = getValues( fieldOrExpression, ok, selectedOnly );
   if ( !ok )
@@ -3219,6 +3193,11 @@ QList<double> QgsVectorLayer::getDoubleValues( const QString &fieldOrExpression,
     double val = value.toDouble( &convertOk );
     if ( convertOk )
       values << val;
+    else if ( value.isNull() )
+    {
+      if ( nullCount )
+        *nullCount += 1;
+    }
   }
   ok = true;
   return values;

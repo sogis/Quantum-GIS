@@ -326,6 +326,7 @@
         <file>themes/default/mIconFirst.png</file>
         <file>themes/default/mIconGeometryLayer.png</file>
         <file>themes/default/mIconInfo.png</file>
+        <file>themes/default/mIconImport.gif</file>
         <file>themes/default/mIconLabelQuadrantCenter.svg</file>
         <file>themes/default/mIconLabelQuadrantOffset.svg</file>
         <file>themes/default/mIconLast.png</file>
@@ -349,6 +350,8 @@
         <file>themes/default/mIconProperties.svg</file>
         <file>themes/default/mIconPyramid.png</file>
         <file>themes/default/mIconRaster.svg</file>
+        <file>themes/default/mIconRasterGroup.svg</file>
+        <file>themes/default/mIconRasterLink.svg</file>
         <file>themes/default/mIconRasterLayer.svg</file>
         <file>themes/default/mIconRenderingDisabled.png</file>
         <file>themes/default/mIconRenderingEnabled.png</file>
