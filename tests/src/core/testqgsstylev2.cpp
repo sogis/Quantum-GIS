@@ -15,7 +15,6 @@
 #include <QtTest/QtTest>
 #include <QObject>
 #include <QStringList>
-#include <QObject>
 #include <QApplication>
 #include <QFileInfo>
 
@@ -80,6 +79,9 @@ class TestStyleV2 : public QObject
 
 TestStyleV2::TestStyleV2()
     : mStyle( NULL )
+    , mpPointsLayer( 0 )
+    , mpLinesLayer( 0 )
+    , mpPolysLayer( 0 )
 {
 
 }
@@ -91,7 +93,7 @@ void TestStyleV2::initTestCase()
   QgsApplication::init( QDir::tempPath() + "/dot-qgis" );
   QgsApplication::initQgis();
   QgsApplication::createDB();
-  mTestDataDir = QString( TEST_DATA_DIR ) + QDir::separator(); //defined in CmakeLists.txt
+  mTestDataDir = QString( TEST_DATA_DIR ) + "/"; //defined in CmakeLists.txt
 
   // output test environment
   QgsApplication::showSettings();
@@ -118,7 +120,7 @@ void TestStyleV2::initTestCase()
   //create a point layer that will be used in all tests...
   //
   QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  mTestDataDir = myDataDir + QDir::separator();
+  mTestDataDir = myDataDir + "/";
   QString myPointsFileName = mTestDataDir + "points.shp";
   QFileInfo myPointFileInfo( myPointsFileName );
   mpPointsLayer = new QgsVectorLayer( myPointFileInfo.filePath(),
@@ -158,9 +160,10 @@ void TestStyleV2::cleanupTestCase()
   // don't save
   // mStyle->save();
   delete mStyle;
+  QgsCptCityArchive::clearArchives();
   QgsApplication::exitQgis();
 
-  QString myReportFile = QDir::tempPath() + QDir::separator() + "qgistest.html";
+  QString myReportFile = QDir::tempPath() + "/qgistest.html";
   QFile myFile( myReportFile );
   if ( myFile.open( QIODevice::WriteOnly | QIODevice::Append ) )
   {
@@ -174,6 +177,7 @@ void TestStyleV2::cleanupTestCase()
 bool TestStyleV2::imageCheck( QgsMapSettings& ms, const QString& testName )
 {
   QgsMultiRenderChecker checker;
+  ms.setOutputDpi( 96 );
   checker.setControlName( "expected_" + testName );
   checker.setMapSettings( ms );
   bool result = checker.runTest( testName, 0 );
@@ -303,7 +307,7 @@ void TestStyleV2::testLoadColorRamps()
 
   QgsDebugMsg( "loaded colorRamps: " + colorRamps.join( " " ) );
 
-  foreach ( QString name, colorRampsTest )
+  Q_FOREACH ( const QString& name, colorRampsTest )
   {
     QgsDebugMsg( "colorRamp " + name );
     QVERIFY( colorRamps.contains( name ) );
@@ -336,7 +340,7 @@ void TestStyleV2::testSaveLoad()
 
   QStringList colorRampsTest = QStringList() << "test_gradient";
 
-  foreach ( QString name, colorRampsTest )
+  Q_FOREACH ( const QString& name, colorRampsTest )
   {
     QgsDebugMsg( "colorRamp " + name );
     QVERIFY( colorRamps.contains( name ) );

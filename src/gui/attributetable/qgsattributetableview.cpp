@@ -65,30 +65,7 @@ QgsAttributeTableView::~QgsAttributeTableView()
 {
   delete mActionPopup;
 }
-#if 0
-void QgsAttributeTableView::setCanvasAndLayerCache( QgsMapCanvas *canvas, QgsVectorLayerCache *layerCache )
-{
-  QgsAttributeTableModel* oldModel = mMasterModel;
-  QgsAttributeTableFilterModel* filterModel = mFilterModel;
 
-  mMasterModel = new QgsAttributeTableModel( layerCache, this );
-
-  mLayerCache = layerCache;
-
-  mMasterModel->loadLayer();
-
-  mFilterModel = new QgsAttributeTableFilterModel( canvas, mMasterModel, mMasterModel );
-  setModel( mFilterModel );
-  delete mFeatureSelectionModel;
-  mFeatureSelectionModel = new QgsFeatureSelectionModel( mFilterModel, mFilterModel, new QgsVectorLayerSelectionManager( layerCache->layer(), mFilterModel ), mFilterModel );
-  connect( mFeatureSelectionModel, SIGNAL( requestRepaint( QModelIndexList ) ), this, SLOT( repaintRequested( QModelIndexList ) ) );
-  connect( mFeatureSelectionModel, SIGNAL( requestRepaint() ), this, SLOT( repaintRequested() ) );
-  setSelectionModel( mFeatureSelectionModel );
-
-  delete oldModel;
-  delete filterModel;
-}
-#endif
 bool QgsAttributeTableView::eventFilter( QObject *object, QEvent *event )
 {
   if ( object == verticalHeader()->viewport() )
@@ -205,7 +182,7 @@ void QgsAttributeTableView::keyPressEvent( QKeyEvent *event )
 
 void QgsAttributeTableView::repaintRequested( QModelIndexList indexes )
 {
-  foreach ( const QModelIndex index, indexes )
+  Q_FOREACH ( const QModelIndex& index, indexes )
   {
     update( index );
   }

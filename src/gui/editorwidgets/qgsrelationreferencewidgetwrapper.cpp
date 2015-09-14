@@ -3,7 +3,7 @@
      --------------------------------------
     Date                 : 20.4.2013
     Copyright            : (C) 2013 Matthias Kuhn
-    Email                : matthias dot kuhn at gmx dot ch
+    Email                : matthias at opengis dot ch
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -99,12 +99,17 @@ QVariant QgsRelationReferenceWidgetWrapper::value()
   }
 }
 
-void QgsRelationReferenceWidgetWrapper::setValue( const QVariant& value )
+bool QgsRelationReferenceWidgetWrapper::valid()
 {
-  if ( !mWidget )
+  return mWidget;
+}
+
+void QgsRelationReferenceWidgetWrapper::setValue( const QVariant& val )
+{
+  if ( !mWidget || val == value() )
     return;
 
-  mWidget->setForeignKey( value );
+  mWidget->setForeignKey( val );
 }
 
 void QgsRelationReferenceWidgetWrapper::setEnabled( bool enabled )

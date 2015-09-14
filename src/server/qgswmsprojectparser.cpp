@@ -20,6 +20,7 @@
 #include "qgsconfigparserutils.h"
 #include "qgslogger.h"
 #include "qgsmaplayer.h"
+#include "qgsmaplayerregistry.h"
 #include "qgsmaplayerstylemanager.h"
 #include "qgsmapserviceexception.h"
 #include "qgspallabeling.h"
@@ -38,6 +39,7 @@
 #include "qgscomposerscalebar.h"
 #include "qgscomposershape.h"
 #include "qgslayertreegroup.h"
+#include "qgslayertreelayer.h"
 
 #include <QFileInfo>
 #include <QTextDocument>
@@ -442,16 +444,51 @@ QgsComposition* QgsWMSProjectParser::initComposition( const QString& composerTem
     QgsComposerLegend* legend = dynamic_cast< QgsComposerLegend *>( *itemIt );
     if ( legend )
     {
-#if 0
       QgsLegendModelV2* model = legend->modelV2();
+#if 0
       QgsLayerTreeGroup* root = model->rootGroup();
       QStringList layerIds = root->findLayerIds();
       throw QgsMapServiceException( "Error", "Composer legend layerIds " + layerIds.join( " ," ) );
 #endif
       if ( legend->autoUpdateModel() )
       {
-        QgsLegendModelV2* model = legend->modelV2();
         model->setRootGroup( projectLayerTreeGroup() );
+      }
+      // if the legend has no map
+      // we will load all layers
+      const QgsComposerMap* map = legend->composerMap();
+      if ( !map )
+      {
+        QgsLayerTreeGroup* root = model->rootGroup();
+        QStringList layerIds = root->findLayerIds();
+        // foreach layer find in the layer tree
+        // load it if the layer id is not QgsMapLayerRegistry
+        Q_FOREACH ( const QString& layerId, layerIds )
+        {
+          QgsMapLayer * layer = QgsMapLayerRegistry::instance()->mapLayer( layerId );
+          if ( layer )
+          {
+            continue;
+          }
+
+          QgsLayerTreeLayer* nodeLayer = root->findLayer( layerId );
+          if ( !nodeLayer )
+          {
+            continue;
+          }
+          layer = nodeLayer->layer();
+          if ( !layer )
+          {
+            const QHash< QString, QDomElement > &projectLayerElements = mProjectParser->projectLayerElementsById();
+            QHash< QString, QDomElement >::const_iterator layerElemIt = projectLayerElements.find( layerId );
+            if ( layerElemIt != projectLayerElements.constEnd() )
+            {
+              layer = mProjectParser->createLayerFromElement( layerElemIt.value(), true );
+            }
+          }
+          QgsMapLayerRegistry::instance()->addMapLayer( layer );
+        }
+        legend->updateLegend();
       }
       legendList.push_back( legend );
       continue;
@@ -779,7 +816,7 @@ void QgsWMSProjectParser::addDrawingOrder( QDomElement& parentElem, QDomDocument
 
 void QgsWMSProjectParser::addLayerStyles( QgsMapLayer* currentLayer, QDomDocument& doc, QDomElement& layerElem, const QString& version ) const
 {
-  foreach ( QString styleName, currentLayer->styleManager()->styles() )
+  Q_FOREACH ( QString styleName, currentLayer->styleManager()->styles() )
   {
     if ( styleName.isEmpty() )
       styleName = EMPTY_STYLE_NAME;
@@ -915,7 +952,7 @@ void QgsWMSProjectParser::addLayers( QDomDocument &doc,
           QStringList pIdDisabled = p->identifyDisabledLayers();
 
           QDomElement embeddedGroupElem;
-          foreach ( const QDomElement &elem, embeddedGroupElements )
+          Q_FOREACH ( const QDomElement &elem, embeddedGroupElements )
           {
             if ( elem.attribute( "name" ) == embeddedGroupName )
             {
@@ -926,7 +963,7 @@ void QgsWMSProjectParser::addLayers( QDomDocument &doc,
 
           QMap<QString, QgsMapLayer *> pLayerMap;
           const QList<QDomElement>& embeddedProjectLayerElements = pp->projectLayerElements();
-          foreach ( const QDomElement &elem, embeddedProjectLayerElements )
+          Q_FOREACH ( const QDomElement &elem, embeddedProjectLayerElements )
           {
             pLayerMap.insert( pp->layerId( elem ), pp->createLayerFromElement( elem ) );
           }
@@ -1174,7 +1211,7 @@ void QgsWMSProjectParser::addLayers( QDomDocument &doc,
 
 void QgsWMSProjectParser::addOWSLayerStyles( QgsMapLayer* currentLayer, QDomDocument& doc, QDomElement& layerElem ) const
 {
-  foreach ( QString styleName, currentLayer->styleManager()->styles() )
+  Q_FOREACH ( QString styleName, currentLayer->styleManager()->styles() )
   {
     if ( styleName.isEmpty() )
       styleName = EMPTY_STYLE_NAME;
@@ -1243,7 +1280,7 @@ void QgsWMSProjectParser::addOWSLayers( QDomDocument &doc,
           QStringList pIdDisabled = p->identifyDisabledLayers();
 
           QDomElement embeddedGroupElem;
-          foreach ( const QDomElement &elem, embeddedGroupElements )
+          Q_FOREACH ( const QDomElement &elem, embeddedGroupElements )
           {
             if ( elem.attribute( "name" ) == embeddedGroupName )
             {
@@ -1254,7 +1291,7 @@ void QgsWMSProjectParser::addOWSLayers( QDomDocument &doc,
 
           QMap<QString, QgsMapLayer *> pLayerMap;
           const QList<QDomElement>& embeddedProjectLayerElements = pp->projectLayerElements();
-          foreach ( const QDomElement &elem, embeddedProjectLayerElements )
+          Q_FOREACH ( const QDomElement &elem, embeddedProjectLayerElements )
           {
             pLayerMap.insert( pp->layerId( elem ), pp->createLayerFromElement( elem ) );
           }
@@ -1534,7 +1571,7 @@ QDomDocument QgsWMSProjectParser::getStyles( QStringList& layerList ) const
       nameNode.appendChild( myDocument.createTextNode( layerName ) );
       namedLayerNode.appendChild( nameNode );
 
-      foreach ( QString styleName, layer->styleManager()->styles() )
+      Q_FOREACH ( QString styleName, layer->styleManager()->styles() )
       {
         if ( layer->hasGeometryType() )
         {

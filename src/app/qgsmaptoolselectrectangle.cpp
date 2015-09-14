@@ -42,17 +42,18 @@ QgsMapToolSelectFeatures::QgsMapToolSelectFeatures( QgsMapCanvas* canvas )
 }
 
 
-void QgsMapToolSelectFeatures::canvasPressEvent( QMouseEvent *e )
+void QgsMapToolSelectFeatures::canvasPressEvent( QgsMapMouseEvent* e )
 {
   Q_UNUSED( e );
   mSelectRect.setRect( 0, 0, 0, 0 );
+  delete mRubberBand;
   mRubberBand = new QgsRubberBand( mCanvas, QGis::Polygon );
   mRubberBand->setFillColor( mFillColor );
   mRubberBand->setBorderColor( mBorderColour );
 }
 
 
-void QgsMapToolSelectFeatures::canvasMoveEvent( QMouseEvent *e )
+void QgsMapToolSelectFeatures::canvasMoveEvent( QgsMapMouseEvent* e )
 {
   if ( e->buttons() != Qt::LeftButton )
     return;
@@ -67,18 +68,14 @@ void QgsMapToolSelectFeatures::canvasMoveEvent( QMouseEvent *e )
 }
 
 
-void QgsMapToolSelectFeatures::canvasReleaseEvent( QMouseEvent *e )
+void QgsMapToolSelectFeatures::canvasReleaseEvent( QgsMapMouseEvent* e )
 {
   QgsVectorLayer* vlayer = QgsMapToolSelectUtils::getCurrentVectorLayer( mCanvas );
   if ( vlayer == NULL )
   {
-    if ( mRubberBand )
-    {
-      mRubberBand->reset( QGis::Polygon );
-      delete mRubberBand;
-      mRubberBand = 0;
-      mDragging = false;
-    }
+    delete mRubberBand;
+    mRubberBand = 0;
+    mDragging = false;
     return;
   }
 
@@ -117,7 +114,6 @@ void QgsMapToolSelectFeatures::canvasReleaseEvent( QMouseEvent *e )
 
     delete selectGeom;
 
-    mRubberBand->reset( QGis::Polygon );
     delete mRubberBand;
     mRubberBand = 0;
   }

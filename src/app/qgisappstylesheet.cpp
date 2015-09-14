@@ -18,6 +18,7 @@
 
 #include "qgisappstylesheet.h"
 #include "qgsapplication.h"
+#include "qgisapp.h"
 #include "qgslogger.h"
 
 #include <QFont>
@@ -91,13 +92,14 @@ QMap<QString, QVariant> QgisAppStyleSheet::defaultOptions()
 
   settings.endGroup(); // "qgis/stylesheet"
 
+  opts.insert( "iconSize", settings.value( "/IconSize", QGIS_ICON_SIZE ) );
+
   return opts;
 }
 
 void QgisAppStyleSheet::buildStyleSheet( const QMap<QString, QVariant>& opts )
 {
-  QString ss = QString( "" );
-
+  QString ss;
 
   // QgisApp-wide font
   QString fontSize = opts.value( "fontPointSize" ).toString();
@@ -216,7 +218,7 @@ void QgisAppStyleSheet::setActiveValues()
 #else
   mLinuxOS = false;
 #endif
-#ifdef Q_OS_WIN32
+#ifdef Q_OS_WIN
   mWinOS = true;
 #else
   mWinOS = false;

@@ -47,6 +47,7 @@ QgsSymbolsListWidget::QgsSymbolsListWidget( QgsSymbolV2* symbol, QgsStyleV2* sty
     , mAdvancedMenu( 0 )
     , mClipFeaturesAction( 0 )
     , mLayer( layer )
+    , mPresetExpressionContext( 0 )
 {
   setupUi( this );
 
@@ -71,7 +72,7 @@ QgsSymbolsListWidget::QgsSymbolsListWidget( QgsSymbolV2* symbol, QgsStyleV2* sty
   groupsCombo->addItem( "" );
   populateGroups();
   QStringList groups = style->smartgroupNames();
-  foreach ( QString group, groups )
+  Q_FOREACH ( const QString& group, groups )
   {
     groupsCombo->addItem( group, QVariant( "smart" ) );
   }
@@ -107,13 +108,18 @@ QgsSymbolsListWidget::QgsSymbolsListWidget( QgsSymbolV2* symbol, QgsStyleV2* sty
   connect( mWidthDDBtn, SIGNAL( dataDefinedActivated( bool ) ), this, SLOT( updateDataDefinedLineWidth() ) );
 
   if ( mSymbol->type() == QgsSymbolV2::Marker && mLayer )
-    mSizeDDBtn->setAssistant( new QgsSizeScaleWidget( mLayer, static_cast<const QgsMarkerSymbolV2*>( mSymbol ) ) );
+    mSizeDDBtn->setAssistant( tr( "Size Assistant..." ), new QgsSizeScaleWidget( mLayer, static_cast<const QgsMarkerSymbolV2*>( mSymbol ) ) );
 
   // Live color updates are not undoable to child symbol layers
   btnColor->setAcceptLiveUpdates( false );
   btnColor->setAllowAlpha( true );
   btnColor->setColorDialogTitle( tr( "Select color" ) );
   btnColor->setContext( "symbology" );
+}
+
+void QgsSymbolsListWidget::setExpressionContext( QgsExpressionContext *context )
+{
+  mPresetExpressionContext = context;
 }
 
 void QgsSymbolsListWidget::populateGroups( QString parent, QString prepend )
@@ -218,6 +224,8 @@ void QgsSymbolsListWidget::updateDataDefinedMarkerAngle()
   QgsMarkerSymbolV2* markerSymbol = static_cast<QgsMarkerSymbolV2*>( mSymbol );
   QgsDataDefined dd = mRotationDDBtn->currentDataDefined();
 
+  spinAngle->setEnabled( !mRotationDDBtn->isActive() );
+
   bool isDefault = dd.hasDefaultValues();
 
   if ( // shall we remove datadefined expressions for layers ?
@@ -244,6 +252,8 @@ void QgsSymbolsListWidget::updateDataDefinedMarkerSize()
   QgsMarkerSymbolV2* markerSymbol = static_cast<QgsMarkerSymbolV2*>( mSymbol );
   QgsDataDefined dd = mSizeDDBtn->currentDataDefined();
 
+  spinSize->setEnabled( !mSizeDDBtn->isActive() );
+
   bool isDefault = dd.hasDefaultValues();
 
   if ( // shall we remove datadefined expressions for layers ?
@@ -269,6 +279,8 @@ void QgsSymbolsListWidget::updateDataDefinedLineWidth()
 {
   QgsLineSymbolV2* lineSymbol = static_cast<QgsLineSymbolV2*>( mSymbol );
   QgsDataDefined dd = mWidthDDBtn->currentDataDefined();
+
+  spinWidth->setEnabled( !mWidthDDBtn->isActive() );
 
   bool isDefault = dd.hasDefaultValues();
 
@@ -354,9 +366,36 @@ void QgsSymbolsListWidget::updateSymbolColor()
   btnColor->blockSignals( false );
 }
 
+static QgsExpressionContext _getExpressionContext( const void* context )
+{
+  const QgsSymbolsListWidget* widget = ( const QgsSymbolsListWidget* ) context;
+
+  if ( widget->expressionContext() )
+    return QgsExpressionContext( *widget->expressionContext() );
+
+  //otherwise create a default symbol context
+  QgsExpressionContext expContext;
+  expContext << QgsExpressionContextUtils::globalScope()
+  << QgsExpressionContextUtils::projectScope()
+  << QgsExpressionContextUtils::atlasScope( 0 )
+  //TODO - use actual map canvas settings
+  << QgsExpressionContextUtils::mapSettingsScope( QgsMapSettings() );
+
+  const QgsVectorLayer* layer = widget->layer();
+  if ( layer )
+    expContext << QgsExpressionContextUtils::layerScope( layer );
+
+  return expContext;
+}
+
 void QgsSymbolsListWidget::updateSymbolInfo()
 {
   updateSymbolColor();
+
+  Q_FOREACH ( QgsDataDefinedButton* button, findChildren< QgsDataDefinedButton* >() )
+  {
+    button->registerGetExpressionContextCallback( &_getExpressionContext, this );
+  }
 
   if ( mSymbol->type() == QgsSymbolV2::Marker )
   {

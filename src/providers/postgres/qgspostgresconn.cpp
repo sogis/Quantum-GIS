@@ -496,6 +496,8 @@ bool QgsPostgresConn::getTableInfo( bool searchGeometryColumnsOnly, bool searchP
       layerProperty.types = QList<QGis::WkbType>() << ( QgsPostgresConn::wkbTypeFromPostgis( type ) );
       layerProperty.srids = QList<int>() << srid;
       layerProperty.sql = "";
+      layerProperty.relKind = relkind;
+      layerProperty.isView = isView;
       /*
        * force2d may get a false negative value
        * (dim == 2 but is not really constrained)
@@ -599,6 +601,8 @@ bool QgsPostgresConn::getTableInfo( bool searchGeometryColumnsOnly, bool searchP
       layerProperty.schemaName = schemaName;
       layerProperty.tableName = tableName;
       layerProperty.geometryColName = column;
+      layerProperty.relKind = relkind;
+      layerProperty.isView = isView;
       if ( coltype == "geometry" )
       {
         layerProperty.geometryColType = sctGeometry;
@@ -682,10 +686,12 @@ bool QgsPostgresConn::getTableInfo( bool searchGeometryColumnsOnly, bool searchP
       layerProperty.tableName = table;
       layerProperty.geometryColName = QString::null;
       layerProperty.geometryColType = sctNone;
+      layerProperty.relKind = relkind;
+      layerProperty.isView = isView;
 
       //check if we've already added this layer in some form
       bool alreadyFound = false;
-      foreach ( QgsPostgresLayerProperty foundLayer, mLayersSupported )
+      Q_FOREACH ( const QgsPostgresLayerProperty& foundLayer, mLayersSupported )
       {
         if ( foundLayer.schemaName == schema && foundLayer.tableName == table )
         {
@@ -868,12 +874,15 @@ QString QgsPostgresConn::postgisVersion()
 
   mGotPostgisVersion = true;
 
-  QgsDebugMsg( "Checking for pointcloud support" );
-  result = PQexec( "SELECT oid FROM pg_catalog.pg_extension WHERE extname = 'pointcloud_postgis'", false );
-  if ( result.PQntuples() == 1 )
+  if ( mPostgresqlVersion >= 90000 )
   {
-    mPointcloudAvailable = true;
-    QgsDebugMsg( "Pointcloud support available!" );
+    QgsDebugMsg( "Checking for pointcloud support" );
+    result = PQexec( "SELECT oid FROM pg_catalog.pg_extension WHERE extname = 'pointcloud_postgis'", false );
+    if ( result.PQntuples() == 1 )
+    {
+      mPointcloudAvailable = true;
+      QgsDebugMsg( "Pointcloud support available!" );
+    }
   }
 
   return mPostgisVersionInfo;
@@ -897,6 +906,9 @@ QString QgsPostgresConn::quotedValue( QVariant value )
     case QVariant::LongLong:
     case QVariant::Double:
       return value.toString();
+
+    case QVariant::Bool:
+      return value.toBool() ? "TRUE" : "FALSE";
 
     default:
     case QVariant::String:
@@ -1474,38 +1486,26 @@ QString QgsPostgresConn::postgisWkbTypeName( QGis::WkbType wkbType )
   return geometryType;
 }
 
-QString QgsPostgresConn::postgisTypeFilter( QString geomCol, QGis::WkbType geomType, bool castToGeometry )
+QString QgsPostgresConn::postgisTypeFilter( QString geomCol, QgsWKBTypes::Type wkbType, bool castToGeometry )
 {
   geomCol = quotedIdentifier( geomCol );
   if ( castToGeometry )
     geomCol += "::geometry";
 
+  QgsWKBTypes::GeometryType geomType = QgsWKBTypes::geometryType( wkbType );
   switch ( geomType )
   {
-    case QGis::WKBPoint:
-    case QGis::WKBPoint25D:
-    case QGis::WKBMultiPoint:
-    case QGis::WKBMultiPoint25D:
-      return QString( "upper(geometrytype(%1)) IN ('POINT','MULTIPOINT','POINTM','MULTIPOINTM')" ).arg( geomCol );
-    case QGis::WKBLineString:
-    case QGis::WKBLineString25D:
-    case QGis::WKBMultiLineString:
-    case QGis::WKBMultiLineString25D:
-      return QString( "upper(geometrytype(%1)) IN ('LINESTRING','MULTILINESTRING','LINESTRINGM','MULTILINESTRINGM')" ).arg( geomCol );
-    case QGis::WKBPolygon:
-    case QGis::WKBPolygon25D:
-    case QGis::WKBMultiPolygon:
-    case QGis::WKBMultiPolygon25D:
-      return QString( "upper(geometrytype(%1)) IN ('POLYGON','MULTIPOLYGON','POLYGONM','MULTIPOLYGONM','POLYHEDRALSURFACE','TIN')" ).arg( geomCol );
-    case QGis::WKBNoGeometry:
+    case QgsWKBTypes::PointGeometry:
+      return QString( "upper(geometrytype(%1)) IN ('POINT','POINTZ','POINTM','POINTZM','MULTIPOINT','MULTIPOINTZ','MULTIPOINTM','MULTIPOINTZM')" ).arg( geomCol );
+    case QgsWKBTypes::LineGeometry:
+      return QString( "upper(geometrytype(%1)) IN ('LINESTRING','LINESTRINGZ','LINESTRINGM','LINESTRINGZM','CIRCULARSTRING','CIRCULARSTRINGZ','CIRCULARSTRINGM','CIRCULARSTRINGZM','COMPOUNDCURVE','COMPOUNDCURVEZ','COMPOUNDCURVEM','COMPOUNDCURVEZM','MULTILINESTRING','MULTILINESTRINGZ','MULTILINESTRINGM','MULTILINESTRINGZM','MULTICURVE','MULTICURVEZ','MULTICURVEM','MULTICURVEZM')" ).arg( geomCol );
+    case QgsWKBTypes::PolygonGeometry:
+      return QString( "upper(geometrytype(%1)) IN ('POLYGON','POLYGONZ','POLYGONM','POLYGONZM','CURVEPOLYGON','CURVEPOLYGONZ','CURVEPOLYGONM','CURVEPOLYGONZM','MULTIPOLYGON','MULTIPOLYGONZ','MULTIPOLYGONM','MULTIPOLYGONZM','MULTIPOLYGONM','MULTISURFACE','MULTISURFACEZ','MULTISURFACEM','MULTISURFACEZM','POLYHEDRALSURFACE','TIN')" ).arg( geomCol );
+    case QgsWKBTypes::NullGeometry:
       return QString( "geometrytype(%1) IS NULL" ).arg( geomCol );
-    case QGis::WKBUnknown:
-      Q_ASSERT( !"unknown geometry unexpected" );
+    default: //unknown geometry
       return QString::null;
   }
-
-  Q_ASSERT( !"unexpected geomType" );
-  return QString::null;
 }
 
 int QgsPostgresConn::postgisWkbTypeDim( QGis::WkbType wkbType )
@@ -1523,28 +1523,13 @@ QGis::WkbType QgsPostgresConn::wkbTypeFromPostgis( QString type )
   return ( QGis::WkbType )QgsWKBTypes::parseType( type );
 }
 
-QGis::WkbType QgsPostgresConn::wkbTypeFromOgcWkbType( unsigned int wkbType )
+QgsWKBTypes::Type QgsPostgresConn::wkbTypeFromOgcWkbType( unsigned int wkbType )
 {
   // polyhedralsurface / TIN / triangle => MultiPolygon
   if ( wkbType % 100 >= 15 )
     wkbType = wkbType / 1000 * 1000 + QGis::WKBMultiPolygon;
 
-  switch ( wkbType / 1000 )
-  {
-    case 0:
-      break;
-    case 1: // Z
-      wkbType = 0x80000000 + wkbType % 100;
-      break;
-    case 2: // M => Z
-      wkbType = 0x80000000 + wkbType % 100;
-      break;
-    case 3: // ZM
-      wkbType = 0xc0000000 + wkbType % 100;
-      break;
-  }
-
-  return ( QGis::WkbType ) wkbType;
+  return ( QgsWKBTypes::Type ) wkbType;
 }
 
 QString QgsPostgresConn::displayStringForWkbType( QGis::WkbType type )

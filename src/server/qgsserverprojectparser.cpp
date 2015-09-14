@@ -86,7 +86,7 @@ QgsServerProjectParser::QgsServerProjectParser()
 
 QgsServerProjectParser::~QgsServerProjectParser()
 {
-  delete mXMLDoc;
+
 }
 
 void QgsServerProjectParser::projectLayerMap( QMap<QString, QgsMapLayer*>& layerMap ) const
@@ -221,7 +221,7 @@ QgsMapLayer* QgsServerProjectParser::createLayerFromElement( const QDomElement& 
   QgsMapLayer* layer = 0;
   if ( useCache )
   {
-    layer = QgsMSLayerCache::instance()->searchLayer( absoluteUri, id );
+    layer = QgsMSLayerCache::instance()->searchLayer( absoluteUri, id, mProjectPath );
   }
 
   if ( layer )

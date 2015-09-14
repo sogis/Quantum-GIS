@@ -21,6 +21,7 @@
 #include <QPointer>
 #include <QToolButton>
 #include <QScopedPointer>
+#include "qgsexpressioncontext.h"
 
 class QgsVectorLayer;
 class QgsDataDefined;
@@ -71,7 +72,7 @@ class GUI_EXPORT QgsDataDefinedButton: public QToolButton
                           const QgsVectorLayer* vl = 0,
                           const QgsDataDefined* datadefined = 0,
                           DataTypes datatypes = AnyType,
-                          QString description = "" );
+                          QString description = QString() );
     ~QgsDataDefinedButton();
 
     /**
@@ -85,7 +86,7 @@ class GUI_EXPORT QgsDataDefinedButton: public QToolButton
     void init( const QgsVectorLayer* vl,
                const QgsDataDefined* datadefined = 0,
                DataTypes datatypes = AnyType,
-               QString description = QString( "" ) );
+               QString description = QString() );
 
     QMap< QString, QString > definedProperty() const { return mProperty; }
 
@@ -194,14 +195,27 @@ class GUI_EXPORT QgsDataDefinedButton: public QToolButton
      */
     void clearCheckedWidgets() { mCheckedWidgets.clear(); }
 
+    //! Callback function for retrieving the expression context for the button
+    typedef QgsExpressionContext( *ExpressionContextCallback )( const void* context );
+
+    /** Register callback function for retrieving the expression context for the button
+     * @param fnGetExpressionContext call back function, will be called when the data defined
+     * button requires the current expression context
+     * @param context context for callback function
+     * @note added in QGIS 2.12
+     * @note not available in Python bindings
+     */
+    void registerGetExpressionContextCallback( ExpressionContextCallback fnGetExpressionContext, const void* context );
+
     /**
      * Sets an assistant used to define the data defined object properties.
      * Ownership of the assistant is transferred to the widget.
+     * @param title menu title for the assistant
      * @param assistant data defined assistant. Set to null to remove the assistant
      * option from the button.
      * @note added in 2.10
      */
-    void setAssistant( QgsDataDefinedAssistant * assistant );
+    void setAssistant( const QString& title, QgsDataDefinedAssistant * assistant );
 
     /**
      * Common descriptions for expected input values
@@ -305,6 +319,8 @@ class GUI_EXPORT QgsDataDefinedButton: public QToolButton
     QMenu* mDefineMenu;
     QAction* mActionDataTypes;
     QMenu* mFieldsMenu;
+    QMenu* mVariablesMenu;
+    QAction* mActionVariables;
 
     QAction* mActionActive;
     QAction* mActionDescription;
@@ -330,6 +346,9 @@ class GUI_EXPORT QgsDataDefinedButton: public QToolButton
     static QIcon mIconDataDefineExpression;
     static QIcon mIconDataDefineExpressionOn;
     static QIcon mIconDataDefineExpressionError;
+
+    ExpressionContextCallback mExpressionContextCallback;
+    const void* mExpressionContextCallbackContext;
 
   private slots:
     void aboutToShowMenu();

@@ -18,24 +18,30 @@ email                : marco.hugentobler at sourcepole dot com
 
 #include "qgsgeometrycollectionv2.h"
 
+/** \ingroup core
+ * \class QgsMultiPointV2
+ * \brief Multi point geometry collection.
+ * \note added in QGIS 2.10
+ * \note this API is not considered stable and may change for 2.12
+ */
 class CORE_EXPORT QgsMultiPointV2: public QgsGeometryCollectionV2
 {
   public:
-    virtual QString geometryType() const { return "MultiPoint"; }
-    QgsAbstractGeometryV2* clone() const;
+    virtual QString geometryType() const override { return "MultiPoint"; }
+    QgsAbstractGeometryV2* clone() const override;
 
-    bool fromWkt( const QString& wkt );
+    bool fromWkt( const QString& wkt ) override;
 
     // inherited: int wkbSize() const;
     // inherited: unsigned char* asWkb( int& binarySize ) const;
     // inherited: QString asWkt( int precision = 17 ) const;
-    QDomElement asGML2( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const;
-    QDomElement asGML3( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const;
-    QString asJSON( int precision = 17 ) const;
+    QDomElement asGML2( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const override;
+    QDomElement asGML3( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const override;
+    QString asJSON( int precision = 17 ) const override;
 
 
-    /**Adds a geometry and takes ownership. Returns true in case of success*/
-    virtual bool addGeometry( QgsAbstractGeometryV2* g );
+    /** Adds a geometry and takes ownership. Returns true in case of success*/
+    virtual bool addGeometry( QgsAbstractGeometryV2* g ) override;
 };
 
 #endif // QGSMULTIPOINTV2_H

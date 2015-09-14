@@ -30,6 +30,7 @@
 #include "qgsgrass.h"
 #include "qgsgrassprovider.h"
 #include "qgsgrassfeatureiterator.h"
+#include "qgsgrassvector.h"
 
 #include "qgsapplication.h"
 #include "qgscoordinatereferencesystem.h"
@@ -90,12 +91,15 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
 {
   QgsDebugMsg( QString( "QgsGrassProvider URI: %1" ).arg( uri ) );
 
-  QgsGrass::init();
+  mValid = false;
+  if ( !QgsGrass::init() )
+  {
+    appendError( QgsGrass::errorMessage() );
+    return;
+  }
 
   QTime time;
   time.start();
-
-  mValid = false;
 
   // Parse URI
   QDir dir( uri );   // it is not a directory in fact
@@ -517,12 +521,21 @@ void QgsGrassProvider::loadAttributes( GLAYER &layer )
   else
   {
     QgsDebugMsg( "Field info found -> open database" );
-    dbDriver *databaseDriver = db_start_driver_open_database( layer.fieldInfo->driver,
-                               layer.fieldInfo->database );
+    dbDriver *databaseDriver = 0;
+    QString error = QString( "Cannot open database %1 by driver %2" ).arg( layer.fieldInfo->database ).arg( layer.fieldInfo->driver );
+    G_TRY
+    {
+      databaseDriver = db_start_driver_open_database( layer.fieldInfo->driver,
+      layer.fieldInfo->database );
+    }
+    G_CATCH( QgsGrass::Exception &e )
+    {
+      QgsGrass::warning( error + " : " + e.what() );
+    }
 
     if ( !databaseDriver )
     {
-      QgsDebugMsg( QString( "Cannot open database %1 by driver %2" ).arg( layer.fieldInfo->database ).arg( layer.fieldInfo->driver ) );
+      QgsDebugMsg( error );
     }
     else
     {
@@ -783,7 +796,7 @@ int QgsGrassProvider::openMap( QString gisdbase, QString location, QString mapse
   map.nUsers = 1;
   map.version = 1;
   map.update = 0;
-  map.map = ( struct Map_info * ) malloc( sizeof( struct Map_info ) );
+  map.map = QgsGrass::vectNewMapStruct();
 
   // Set GRASS location
   QgsGrass::setLocation( gisdbase, location );
@@ -816,8 +829,7 @@ int QgsGrassProvider::openMap( QString gisdbase, QString location, QString mapse
   }
   G_CATCH( QgsGrass::Exception &e )
   {
-    Q_UNUSED( e );
-    QgsDebugMsg( QString( "Cannot open GRASS vector head on level2: %1" ).arg( e.what() ) );
+    QgsGrass::warning( e );
     level = -1;
   }
 
@@ -844,8 +856,7 @@ int QgsGrassProvider::openMap( QString gisdbase, QString location, QString mapse
   }
   G_CATCH( QgsGrass::Exception &e )
   {
-    Q_UNUSED( e );
-    QgsDebugMsg( QString( "Cannot open GRASS vector: %1" ).arg( e.what() ) );
+    QgsGrass::warning( QString( "Cannot open GRASS vector: %1" ).arg( e.what() ) );
     return -1;
   }
 
@@ -862,8 +873,7 @@ int QgsGrassProvider::openMap( QString gisdbase, QString location, QString mapse
     }
     G_CATCH( QgsGrass::Exception &e )
     {
-      Q_UNUSED( e );
-      QgsDebugMsg( QString( "Cannot build topology: %1" ).arg( e.what() ) );
+      QgsGrass::warning( QString( "Cannot build topology: %1" ).arg( e.what() ) );
       return -1;
     }
   }
@@ -982,6 +992,8 @@ void QgsGrassProvider::closeMap( int mapId )
 
       if ( mapsetunset )
         G__setenv(( char * )"MAPSET", "" );
+
+      // TODO: verify if vectDestroyMapStruct(map->map) could/should be called
     }
     map->valid = false;
   }
@@ -1601,62 +1613,14 @@ QVector<QgsField> *QgsGrassProvider::columns( int field )
     return col;
   }
 
-  QgsDebugMsg( "Field info found -> open database" );
-  QgsGrass::setMapset( mGisdbase, mLocation, mMapset );
-  dbDriver *driver = db_start_driver_open_database( fi->driver, fi->database );
+  QgsGrassObject grassObject( mGisdbase, mLocation, mMapset, mMapName, QgsGrassObject::Vector );
+  QgsGrassVectorLayer vectorLayer( grassObject, field, fi );
 
-  if ( !driver )
+  QgsFields fields = vectorLayer.fields();
+  for ( int i = 0; i < fields.size(); i++ )
   {
-    QgsDebugMsg( QString( "Cannot open database %1 by driver %2" ).arg( fi->database ).arg( fi->driver ) );
-    return col;
+    col->append( fields[i] );
   }
-
-  QgsDebugMsg( "Database opened -> describe table" );
-
-  dbString tableName;
-  db_init_string( &tableName );
-  db_set_string( &tableName, fi->table );
-
-  dbTable *table;
-  if ( db_describe_table( driver, &tableName, &table ) != DB_OK )
-  {
-    QgsDebugMsg( "Cannot describe table" );
-    return col;
-  }
-
-  int nCols = db_get_table_number_of_columns( table );
-
-  for ( int c = 0; c < nCols; c++ )
-  {
-    dbColumn *column = db_get_table_column( table, c );
-
-    int ctype = db_sqltype_to_Ctype( db_get_column_sqltype( column ) );
-    QString type;
-    QVariant::Type qtype = QVariant::String; //default to string to prevent compiler warnings
-    switch ( ctype )
-    {
-      case DB_C_TYPE_INT:
-        type = "int";
-        qtype = QVariant::Int;
-        break;
-      case DB_C_TYPE_DOUBLE:
-        type = "double";
-        qtype = QVariant::Double;
-        break;
-      case DB_C_TYPE_STRING:
-        type = "string";
-        qtype = QVariant::String;
-        break;
-      case DB_C_TYPE_DATETIME:
-        type = "datetime";
-        qtype = QVariant::String;
-        break;
-    }
-    col->push_back( QgsField( db_get_column_name( column ), qtype, type, db_get_column_length( column ), 0 ) );
-  }
-
-  db_close_database_shutdown_driver( driver );
-
   return col;
 }
 
@@ -2093,21 +2057,6 @@ void QgsGrassProvider::setTopoFields()
   {
     mTopoFields.append( QgsField( "lines", QVariant::String ) );
   }
-}
-
-QString QgsGrassProvider::primitiveTypeName( int type )
-{
-  switch ( type )
-  {
-    case GV_POINT: return "point";
-    case GV_CENTROID: return "centroid";
-    case GV_LINE: return "line";
-    case GV_BOUNDARY: return "boundary";
-    case GV_FACE: return "face";
-    case GV_KERNEL: return "kernel";
-
-  }
-  return "unknown";
 }
 
 // -------------------------------------------------------------------------------

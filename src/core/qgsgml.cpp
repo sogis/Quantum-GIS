@@ -369,6 +369,7 @@ void QgsGml::endElement( const XML_Char* el )
     if ( mCurrentWKBSize > 0 )
     {
       mCurrentFeature->setGeometryAndOwnership( mCurrentWKB, mCurrentWKBSize );
+      mCurrentWKB = 0;
     }
     else if ( !mCurrentExtent.isEmpty() )
     {
@@ -947,9 +948,9 @@ int QgsGml::createMultiPolygonFromFragments()
 int QgsGml::totalWKBFragmentSize() const
 {
   int result = 0;
-  foreach ( const QList<int> &list, mCurrentWKBFragmentSizes )
+  Q_FOREACH ( const QList<int> &list, mCurrentWKBFragmentSizes )
   {
-    foreach ( int i, list )
+    Q_FOREACH ( int i, list )
     {
       result += i;
     }

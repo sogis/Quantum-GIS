@@ -73,21 +73,47 @@ void QgsSizeScaleWidget::setFromSymbol()
     maxValueSpinBox->setValue( expr.maxValue() );
     minSizeSpinBox->setValue( expr.minSize() );
     maxSizeSpinBox->setValue( expr.maxSize() );
+    nullSizeSpinBox->setValue( expr.nullSize() );
   }
   updatePreview();
+}
+
+static QgsExpressionContext _getExpressionContext( const void* context )
+{
+  QgsExpressionContext expContext;
+  expContext << QgsExpressionContextUtils::globalScope()
+  << QgsExpressionContextUtils::projectScope()
+  << QgsExpressionContextUtils::atlasScope( 0 )
+  //TODO - use actual map canvas settings
+  << QgsExpressionContextUtils::mapSettingsScope( QgsMapSettings() );
+
+  const QgsVectorLayer* layer = ( const QgsVectorLayer* ) context;
+  if ( layer )
+    expContext << QgsExpressionContextUtils::layerScope( layer );
+
+  return expContext;
 }
 
 QgsSizeScaleWidget::QgsSizeScaleWidget( const QgsVectorLayer * layer, const QgsMarkerSymbolV2 * symbol )
     : mSymbol( symbol )
     // we just use the minimumValue and maximumValue from the layer, unfortunately they are
     // non const, so we get the layer from the registry instead
-    , mLayer( dynamic_cast<QgsVectorLayer *>( QgsMapLayerRegistry::instance()->mapLayer( layer->id() ) ) )
+    , mLayer( layer ? dynamic_cast<QgsVectorLayer *>( QgsMapLayerRegistry::instance()->mapLayer( layer->id() ) ) : 0 )
 {
   setupUi( this );
   setWindowFlags( Qt::WindowStaysOnTopHint );
 
-  mLayerTreeLayer = new QgsLayerTreeLayer( mLayer );
-  mRoot.addChildNode( mLayerTreeLayer ); // takes ownership
+  mExpressionWidget->registerGetExpressionContextCallback( &_getExpressionContext, mLayer );
+
+  if ( mLayer )
+  {
+    mLayerTreeLayer = new QgsLayerTreeLayer( mLayer );
+    mRoot.addChildNode( mLayerTreeLayer ); // takes ownership
+  }
+  else
+  {
+    mLayerTreeLayer = 0;
+  }
 
   treeView->setModel( &mPreviewList );
   treeView->setItemDelegate( new ItemDelegate( &mPreviewList ) );
@@ -103,7 +129,10 @@ QgsSizeScaleWidget::QgsSizeScaleWidget( const QgsVectorLayer * layer, const QgsM
   connect( computeValuesButton, SIGNAL( clicked() ), computeValuesButton, SLOT( showMenu() ) );
 
   //mExpressionWidget->setFilters( QgsFieldProxyModel::Numeric | QgsFieldProxyModel::Date );
-  mExpressionWidget->setLayer( mLayer );
+  if ( mLayer )
+  {
+    mExpressionWidget->setLayer( mLayer );
+  }
 
   scaleMethodComboBox->addItem( tr( "Flannery" ), int( QgsScaleExpression::Flannery ) );
   scaleMethodComboBox->addItem( tr( "Surface" ), int( QgsScaleExpression::Area ) );
@@ -113,6 +142,7 @@ QgsSizeScaleWidget::QgsSizeScaleWidget( const QgsVectorLayer * layer, const QgsM
   maxSizeSpinBox->setShowClearButton( false );
   minValueSpinBox->setShowClearButton( false );
   maxValueSpinBox->setShowClearButton( false );
+  nullSizeSpinBox->setShowClearButton( false );
 
   // setup ui from expression if any
   setFromSymbol();
@@ -121,6 +151,7 @@ QgsSizeScaleWidget::QgsSizeScaleWidget( const QgsVectorLayer * layer, const QgsM
   connect( maxSizeSpinBox, SIGNAL( valueChanged( double ) ), this, SLOT( updatePreview() ) );
   connect( minValueSpinBox, SIGNAL( valueChanged( double ) ), this, SLOT( updatePreview() ) );
   connect( maxValueSpinBox, SIGNAL( valueChanged( double ) ), this, SLOT( updatePreview() ) );
+  connect( nullSizeSpinBox, SIGNAL( valueChanged( double ) ), this, SLOT( updatePreview() ) );
   //potentially very expensive for large layers:
   connect( mExpressionWidget, SIGNAL( fieldChanged( QString ) ), this, SLOT( computeFromLayerTriggered() ) );
   connect( scaleMethodComboBox, SIGNAL( currentIndexChanged( int ) ), this, SLOT( updatePreview() ) );
@@ -144,12 +175,13 @@ QgsScaleExpression *QgsSizeScaleWidget::createExpression() const
                                  minValueSpinBox->value(),
                                  maxValueSpinBox->value(),
                                  minSizeSpinBox->value(),
-                                 maxSizeSpinBox->value() );
+                                 maxSizeSpinBox->value(),
+                                 nullSizeSpinBox->value() );
 }
 
 void QgsSizeScaleWidget::updatePreview()
 {
-  if ( !mSymbol )
+  if ( !mSymbol || !mLayer )
     return;
 
   QScopedPointer<QgsScaleExpression> expr( createExpression() );
@@ -162,7 +194,7 @@ void QgsSizeScaleWidget::updatePreview()
   {
     QScopedPointer< QgsMarkerSymbolV2 > symbol( dynamic_cast<QgsMarkerSymbolV2*>( mSymbol->clone() ) );
     symbol->setDataDefinedSize( QgsDataDefined() );
-    symbol->setDataDefinedAngle( "" ); // to avoid symbol not beeing drawn
+    symbol->setDataDefinedAngle( QgsDataDefined() ); // to avoid symbol not beeing drawn
     symbol->setSize( expr->size( breaks[i] ) );
     QgsSymbolV2LegendNode node( mLayerTreeLayer, QgsLegendSymbolItemV2( symbol.data(), QString::number( i ), 0 ) );
     const QSize sz( node.minimumIconSize() );
@@ -189,8 +221,18 @@ void QgsSizeScaleWidget::updatePreview()
 
 void QgsSizeScaleWidget::computeFromLayerTriggered()
 {
+  if ( !mLayer )
+    return;
+
   QgsExpression expression( mExpressionWidget->currentField() );
-  if ( ! expression.prepare( mLayer->pendingFields() ) )
+
+  QgsExpressionContext context;
+  context << QgsExpressionContextUtils::globalScope()
+  << QgsExpressionContextUtils::projectScope()
+  << QgsExpressionContextUtils::atlasScope( 0 )
+  << QgsExpressionContextUtils::layerScope( mLayer );
+
+  if ( ! expression.prepare( &context ) )
     return;
 
   QStringList lst( expression.referencedColumns() );
@@ -199,7 +241,7 @@ void QgsSizeScaleWidget::computeFromLayerTriggered()
                              QgsFeatureRequest().setFlags( expression.needsGeometry()
                                                            ? QgsFeatureRequest::NoFlags
                                                            : QgsFeatureRequest::NoGeometry )
-                             .setSubsetOfAttributes( lst, mLayer->pendingFields() ) );
+                             .setSubsetOfAttributes( lst, mLayer->fields() ) );
 
   // create list of non-null attribute values
   double min = DBL_MAX;
@@ -208,7 +250,8 @@ void QgsSizeScaleWidget::computeFromLayerTriggered()
   while ( fit.nextFeature( f ) )
   {
     bool ok;
-    const double value = expression.evaluate( f ).toDouble( &ok );
+    context.setFeature( f );
+    const double value = expression.evaluate( &context ).toDouble( &ok );
     if ( ok )
     {
       max = qMax( max, value );

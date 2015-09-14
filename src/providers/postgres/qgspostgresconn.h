@@ -26,6 +26,7 @@
 
 #include "qgis.h"
 #include "qgsdatasourceuri.h"
+#include "qgswkbtypes.h"
 
 extern "C"
 {
@@ -76,6 +77,8 @@ struct QgsPostgresLayerProperty
   unsigned int                  nSpCols;
   QString                       sql;
   bool                          force2d;
+  QString                       relKind;
+  bool                          isView;
 
 
   // TODO: rename this !
@@ -104,6 +107,8 @@ struct QgsPostgresLayerProperty
     property.nSpCols         = nSpCols;
     property.sql             = sql;
     property.force2d         = force2d;
+    property.relKind         = relKind;
+    property.isView          = isView;
 
     return property;
   }
@@ -112,14 +117,14 @@ struct QgsPostgresLayerProperty
   QString toString() const
   {
     QString typeString;
-    foreach ( QGis::WkbType type, types )
+    Q_FOREACH ( QGis::WkbType type, types )
     {
       if ( !typeString.isEmpty() )
         typeString += "|";
       typeString += QString::number( type );
     }
     QString sridString;
-    foreach ( int srid, srids )
+    Q_FOREACH ( int srid, srids )
     {
       if ( !sridString.isEmpty() )
         sridString += "|";
@@ -253,7 +258,7 @@ class QgsPostgresConn : public QObject
      */
     static QString quotedValue( QVariant value );
 
-    /**Get the list of supported layers
+    /** Get the list of supported layers
      * @param layers list to store layers in
      * @param searchGeometryColumnsOnly only look for geometry columns which are
      * contained in the geometry_columns metatable
@@ -268,7 +273,7 @@ class QgsPostgresConn : public QObject
                           bool allowGeometrylessTables = false,
                           const QString schema = QString() );
 
-    /**Get the list of database schemas
+    /** Get the list of database schemas
      * @param schemas list to store schemas in
      * @returns true if schemas where fetched successfully
      * @note added in QGIS 2.7
@@ -277,7 +282,7 @@ class QgsPostgresConn : public QObject
 
     void retrieveLayerTypes( QgsPostgresLayerProperty &layerProperty, bool useEstimatedMetadata );
 
-    /**Gets information about the spatial tables
+    /** Gets information about the spatial tables
      * @param searchGeometryColumnsOnly only look for geometry columns which are
      * contained in the geometry_columns metatable
      * @param searchPublicOnly
@@ -304,10 +309,10 @@ class QgsPostgresConn : public QObject
     static int postgisWkbTypeDim( QGis::WkbType wkbType );
     static void postgisWkbType( QGis::WkbType wkbType, QString &geometryType, int &dim );
 
-    static QString postgisTypeFilter( QString geomCol, QGis::WkbType wkbType, bool castToGeometry );
+    static QString postgisTypeFilter( QString geomCol, QgsWKBTypes::Type wkbType, bool castToGeometry );
 
     static QGis::WkbType wkbTypeFromGeomType( QGis::GeometryType geomType );
-    static QGis::WkbType wkbTypeFromOgcWkbType( unsigned int ogcWkbType );
+    static QgsWKBTypes::Type wkbTypeFromOgcWkbType( unsigned int ogcWkbType );
 
     static QStringList connectionList();
     static QString selectedConnection();
@@ -370,7 +375,7 @@ class QgsPostgresConn : public QObject
     static QMap<QString, QgsPostgresConn *> sConnectionsRW;
     static QMap<QString, QgsPostgresConn *> sConnectionsRO;
 
-    /** count number of spatial columns in a given relation */
+    /** Count number of spatial columns in a given relation */
     void addColumnInfo( QgsPostgresLayerProperty& layerProperty, const QString& schemaName, const QString& viewName, bool fetchPkCandidates );
 
     //! List of the supported layers

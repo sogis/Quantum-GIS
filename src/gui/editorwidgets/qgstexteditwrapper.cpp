@@ -3,7 +3,7 @@
      --------------------------------------
     Date                 : 5.1.2014
     Copyright            : (C) 2014 Matthias Kuhn
-    Email                : matthias dot kuhn at gmx dot ch
+    Email                : matthias at opengis dot ch
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -130,27 +130,38 @@ void QgsTextEditWrapper::initWidget( QWidget* editor )
   }
 }
 
-void QgsTextEditWrapper::setValue( const QVariant& value )
+bool QgsTextEditWrapper::valid()
+{
+  return mLineEdit || mTextEdit || mPlainTextEdit;
+}
+
+void QgsTextEditWrapper::setValue( const QVariant& val )
 {
   QString v;
-  if ( value.isNull() )
+  if ( val.isNull() )
   {
     if ( !( field().type() == QVariant::Int || field().type() == QVariant::Double || field().type() == QVariant::LongLong || field().type() == QVariant::Date ) )
       v = QSettings().value( "qgis/nullValue", "NULL" ).toString();
   }
   else
-    v = value.toString();
+    v = val.toString();
 
   if ( mTextEdit )
   {
-    if ( config( "UseHtml" ).toBool() )
-      mTextEdit->setHtml( v );
-    else
-      mTextEdit->setPlainText( v );
+    if ( val != value() )
+    {
+      if ( config( "UseHtml" ).toBool() )
+        mTextEdit->setHtml( v );
+      else
+        mTextEdit->setPlainText( v );
+    }
   }
 
   if ( mPlainTextEdit )
-    mPlainTextEdit->setPlainText( v );
+  {
+    if ( val != value() )
+      mPlainTextEdit->setPlainText( v );
+  }
 
   if ( mLineEdit )
     mLineEdit->setText( v );

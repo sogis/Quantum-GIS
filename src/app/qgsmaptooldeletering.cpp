@@ -18,13 +18,14 @@
 #include "qgsmapcanvas.h"
 #include "qgsvertexmarker.h"
 #include "qgsvectorlayer.h"
+#include "qgisapp.h"
 
 #include <QMouseEvent>
 #include <limits>
 
 QgsMapToolDeleteRing::QgsMapToolDeleteRing( QgsMapCanvas* canvas )
     : QgsMapToolEdit( canvas )
-    , vlayer( NULL )
+    , vlayer( 0 )
     , mRubberBand( 0 )
     , mPressedFid( 0 )
     , mPressedPartNum( 0 )
@@ -38,13 +39,13 @@ QgsMapToolDeleteRing::~QgsMapToolDeleteRing()
   delete mRubberBand;
 }
 
-void QgsMapToolDeleteRing::canvasMoveEvent( QMouseEvent *e )
+void QgsMapToolDeleteRing::canvasMoveEvent( QgsMapMouseEvent* e )
 {
   Q_UNUSED( e );
   //nothing to do
 }
 
-void QgsMapToolDeleteRing::canvasPressEvent( QMouseEvent *e )
+void QgsMapToolDeleteRing::canvasPressEvent( QgsMapMouseEvent* e )
 {
   delete mRubberBand;
   mRubberBand = 0;
@@ -88,9 +89,12 @@ void QgsMapToolDeleteRing::canvasPressEvent( QMouseEvent *e )
     mRubberBand->setToGeometry( ringGeom, vlayer );
     mRubberBand->show();
   }
+
+  delete ringGeom;
+  ringGeom = 0;
 }
 
-void QgsMapToolDeleteRing::canvasReleaseEvent( QMouseEvent *e )
+void QgsMapToolDeleteRing::canvasReleaseEvent( QgsMapMouseEvent* e )
 {
   Q_UNUSED( e );
 
@@ -124,10 +128,10 @@ QgsGeometry* QgsMapToolDeleteRing::ringUnderPoint( QgsPoint p, QgsFeatureId& fid
   QgsFeatureIterator fit = vlayer->getFeatures( QgsFeatureRequest().setFilterRect( toLayerCoordinates( vlayer, mCanvas->extent() ) ) );
   QgsFeature f;
   const QgsGeometry* g;
-  QgsGeometry* ringGeom = 0;
+  QScopedPointer<QgsGeometry> ringGeom;
   QgsMultiPolygon pol;
   QgsPolygon tempPol;
-  QgsGeometry* tempGeom;
+  QScopedPointer<QgsGeometry> tempGeom;
   double area = std::numeric_limits<double>::max();
   while ( fit.nextFeature( f ) )
   {
@@ -150,20 +154,20 @@ QgsGeometry* QgsMapToolDeleteRing::ringUnderPoint( QgsPoint p, QgsFeatureId& fid
         for ( int j = 1; j < pol[i].size();++j )
         {
           tempPol = QgsPolygon() << pol[i][j];
-          tempGeom = QgsGeometry::fromPolygon( tempPol );
+          tempGeom.reset( QgsGeometry::fromPolygon( tempPol ) );
           if ( tempGeom->area() < area && tempGeom->contains( &p ) )
           {
             fid = f.id();
             partNum = i;
             ringNum = j;
-            ringGeom = tempGeom;
             area = tempGeom->area();
+            ringGeom.reset( tempGeom.take() );
           }
         }
       }
     }
   }
-  return ringGeom;
+  return ringGeom.take();
 }
 
 

@@ -136,10 +136,10 @@ class APP_EXPORT QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdenti
     /** Add feature from identify results */
     void addFeature( QgsMapToolIdentify::IdentifyResult result );
 
-    /** map tool was deactivated */
+    /** Map tool was deactivated */
     void deactivate();
 
-    /** map tool was activated */
+    /** Map tool was activated */
     void activate();
 
   signals:
@@ -199,14 +199,14 @@ class APP_EXPORT QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdenti
 
     void on_cmbViewMode_currentIndexChanged( int index );
 
-    void on_mExpandNewToolButton_toggled( bool checked );
+    void on_mExpandNewAction_triggered( bool checked );
 
     void on_cbxAutoFeatureForm_toggled( bool checked );
 
-    void on_mExpandToolButton_clicked( bool checked ) { Q_UNUSED( checked ); expandAll(); }
-    void on_mCollapseToolButton_clicked( bool checked ) { Q_UNUSED( checked ); collapseAll(); }
+    void on_mExpandAction_triggered( bool checked ) { Q_UNUSED( checked ); expandAll(); }
+    void on_mCollapseAction_triggered( bool checked ) { Q_UNUSED( checked ); collapseAll(); }
 
-    void on_mCopyToolButton_clicked( bool checked );
+    void on_mActionCopy_triggered( bool checked );
 
     void formatChanged( int index );
 

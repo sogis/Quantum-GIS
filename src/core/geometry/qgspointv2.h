@@ -20,6 +20,12 @@
 
 #include "qgsabstractgeometryv2.h"
 
+/** \ingroup core
+ * \class QgsPointV2
+ * \brief Point geometry type.
+ * \note added in QGIS 2.10
+ * \note this API is not considered stable and may change for 2.12
+ */
 class CORE_EXPORT QgsPointV2: public QgsAbstractGeometryV2
 {
   public:
@@ -29,8 +35,8 @@ class CORE_EXPORT QgsPointV2: public QgsAbstractGeometryV2
     bool operator==( const QgsPointV2& pt ) const;
     bool operator!=( const QgsPointV2& pt ) const;
 
-    virtual QgsAbstractGeometryV2* clone() const;
-    void clear();
+    virtual QgsAbstractGeometryV2* clone() const override;
+    void clear() override;
 
     double x() const { return mX; }
     double y() const { return mY; }
@@ -42,37 +48,47 @@ class CORE_EXPORT QgsPointV2: public QgsAbstractGeometryV2
     void setZ( double z ) { mZ = z; }
     void setM( double m ) { mM = m; }
 
-    virtual QString geometryType() const { return "Point"; }
+    virtual QString geometryType() const override { return "Point"; }
 
     //implementation of inherited methods
-    virtual int dimension() const { return 0; }
+    virtual int dimension() const override { return 0; }
 
 
-    virtual bool fromWkb( const unsigned char* wkb );
-    virtual bool fromWkt( const QString& wkt );
+    virtual bool fromWkb( const unsigned char* wkb ) override;
+    virtual bool fromWkt( const QString& wkt ) override;
 
-    int wkbSize() const;
-    unsigned char* asWkb( int& binarySize ) const;
-    QString asWkt( int precision = 17 ) const;
-    QDomElement asGML2( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const;
-    QDomElement asGML3( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const;
-    QString asJSON( int precision = 17 ) const;
+    int wkbSize() const override;
+    unsigned char* asWkb( int& binarySize ) const override;
+    QString asWkt( int precision = 17 ) const override;
+    QDomElement asGML2( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const override;
+    QDomElement asGML3( QDomDocument& doc, int precision = 17, const QString& ns = "gml" ) const override;
+    QString asJSON( int precision = 17 ) const override;
 
-    virtual QgsRectangle calculateBoundingBox() const { return QgsRectangle( mX, mY, mX, mY );}
+    virtual QgsRectangle calculateBoundingBox() const override { return QgsRectangle( mX, mY, mX, mY );}
 
-    void draw( QPainter& p ) const;
-    void transform( const QgsCoordinateTransform& ct );
-    void transform( const QTransform& t );
+    void draw( QPainter& p ) const override;
 
-    virtual void coordinateSequence( QList< QList< QList< QgsPointV2 > > >& coord ) const;
+    /** Transforms the geometry using a coordinate transform
+     * @param ct coordinate transform
+       @param d transformation direction
+     */
+    void transform( const QgsCoordinateTransform& ct, QgsCoordinateTransform::TransformDirection d = QgsCoordinateTransform::ForwardTransform ) override;
+    void transform( const QTransform& t ) override;
+
+    virtual void coordinateSequence( QList< QList< QList< QgsPointV2 > > >& coord ) const override;
 
     //low-level editing
-    virtual bool insertVertex( const QgsVertexId& position, const QgsPointV2& vertex ) { Q_UNUSED( position ); Q_UNUSED( vertex ); return false; }
-    virtual bool moveVertex( const QgsVertexId& position, const QgsPointV2& newPos );
-    virtual bool deleteVertex( const QgsVertexId& position ) { Q_UNUSED( position ); return false; }
+    virtual bool insertVertex( const QgsVertexId& position, const QgsPointV2& vertex ) override { Q_UNUSED( position ); Q_UNUSED( vertex ); return false; }
+    virtual bool moveVertex( const QgsVertexId& position, const QgsPointV2& newPos ) override;
+    virtual bool deleteVertex( const QgsVertexId& position ) override { Q_UNUSED( position ); return false; }
 
-    double closestSegment( const QgsPointV2& pt, QgsPointV2& segmentPt,  QgsVertexId& vertexAfter, bool* leftOf, double epsilon ) const;
-    bool nextVertex( QgsVertexId& id, QgsPointV2& vertex ) const;
+    double closestSegment( const QgsPointV2& pt, QgsPointV2& segmentPt,  QgsVertexId& vertexAfter, bool* leftOf, double epsilon ) const override;
+    bool nextVertex( QgsVertexId& id, QgsPointV2& vertex ) const override;
+
+    /** Angle undefined. Always returns 0.0
+        @param vertex the vertex id
+        @return 0.0*/
+    double vertexAngle( const QgsVertexId& vertex ) const override { Q_UNUSED( vertex ); return 0.0; }
 
   private:
     double mX;

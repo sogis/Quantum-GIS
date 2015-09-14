@@ -3,7 +3,7 @@
      --------------------------------------
     Date                 : 3.5.2014
     Copyright            : (C) 2014 Matthias Kuhn
-    Email                : matthias dot kuhn at gmx dot ch
+    Email                : matthias at opengis dot ch
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -196,6 +196,7 @@ bool QgsAttributeForm::save()
         {
           mFeature.setAttributes( updatedFeature.attributes() );
           mLayer->endEditCommand();
+          mIsAddDialog = false;
           changedLayer = true;
         }
         else
@@ -277,9 +278,8 @@ void QgsAttributeForm::onAttributeAdded( int idx )
   if ( mFeature.isValid() )
   {
     QgsAttributes attrs = mFeature.attributes();
-    Q_ASSERT( attrs.size() == idx );
-    attrs.append( QVariant( layer()->pendingFields()[idx].type() ) );
-    mFeature.setFields( layer()->pendingFields() );
+    attrs.insert( idx, QVariant( layer()->fields()[idx].type() ) );
+    mFeature.setFields( layer()->fields() );
     mFeature.setAttributes( attrs );
   }
   init();
@@ -292,9 +292,23 @@ void QgsAttributeForm::onAttributeDeleted( int idx )
   {
     QgsAttributes attrs = mFeature.attributes();
     attrs.remove( idx );
-    mFeature.setFields( layer()->pendingFields() );
+    mFeature.setFields( layer()->fields() );
     mFeature.setAttributes( attrs );
   }
+  init();
+  setFeature( mFeature );
+}
+
+void QgsAttributeForm::refreshFeature()
+{
+  if ( mLayer->isEditable() || !mFeature.isValid() )
+    return;
+
+  // reload feature if layer changed although not editable
+  // (datasource probably changed bypassing QgsVectorLayer)
+  if ( !mLayer->getFeatures( QgsFeatureRequest().setFilterFid( mFeature.id() ) ).nextFeature( mFeature ) )
+    return;
+
   init();
   setFeature( mFeature );
 }
@@ -373,7 +387,7 @@ void QgsAttributeForm::init()
   // Tab layout
   if ( !formWidget && mLayer->editorLayout() == QgsVectorLayer::TabLayout )
   {
-    QTabWidget* tabWidget = new QTabWidget( this );
+    QTabWidget* tabWidget = new QTabWidget();
     layout()->addWidget( tabWidget );
 
     Q_FOREACH ( QgsAttributeEditorElement *widgDef, mLayer->attributeEditorElements() )
@@ -381,7 +395,8 @@ void QgsAttributeForm::init()
       QWidget* tabPage = new QWidget( tabWidget );
 
       tabWidget->addTab( tabPage, widgDef->name() );
-      QGridLayout *tabPageLayout = new QGridLayout( tabPage );
+      QGridLayout* tabPageLayout = new QGridLayout();
+      tabPage->setLayout( tabPageLayout );
 
       if ( widgDef->type() == QgsAttributeEditorElement::AeTypeContainer )
       {
@@ -421,7 +436,7 @@ void QgsAttributeForm::init()
     layout()->addWidget( scrollArea );
 
     int row = 0;
-    Q_FOREACH ( const QgsField& field, mLayer->pendingFields().toList() )
+    Q_FOREACH ( const QgsField& field, mLayer->fields().toList() )
     {
       int idx = mLayer->fieldNameIndex( field.name() );
       if ( idx < 0 )
@@ -573,7 +588,7 @@ QWidget* QgsAttributeForm::createWidgetFromDef( const QgsAttributeEditorElement 
         break;
 
       int fldIdx = vl->fieldNameIndex( fieldDef->name() );
-      if ( fldIdx < vl->pendingFields().count() && fldIdx >= 0 )
+      if ( fldIdx < vl->fields().count() && fldIdx >= 0 )
       {
         const QString widgetType = mLayer->editorWidgetV2( fldIdx );
         const QgsEditorWidgetConfig widgetConfig = mLayer->editorWidgetV2Config( fldIdx );
@@ -582,7 +597,7 @@ QWidget* QgsAttributeForm::createWidgetFromDef( const QgsAttributeEditorElement 
         newWidget = eww->widget();
         addWidgetWrapper( eww );
 
-        newWidget->setObjectName( mLayer->pendingFields()[ fldIdx ].name() );
+        newWidget->setObjectName( mLayer->fields()[ fldIdx ].name() );
       }
 
       labelOnTop = mLayer->labelOnTop( fieldDef->idx() );
@@ -631,7 +646,7 @@ QWidget* QgsAttributeForm::createWidgetFromDef( const QgsAttributeEditorElement 
         newWidget = scrollArea;
       }
 
-      QGridLayout* gbLayout = new QGridLayout( myContainer );
+      QGridLayout* gbLayout = new QGridLayout();
       myContainer->setLayout( gbLayout );
 
       int index = 0;
@@ -666,7 +681,9 @@ QWidget* QgsAttributeForm::createWidgetFromDef( const QgsAttributeEditorElement 
 
         ++index;
       }
-      gbLayout->addItem( new QSpacerItem( 0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding ), index, 0 );
+      QWidget* spacer = new QWidget();
+      spacer->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Preferred );
+      gbLayout->addWidget( spacer, index, 0 );
 
       labelText = QString::null;
       labelOnTop = true;
@@ -703,7 +720,7 @@ void QgsAttributeForm::addWidgetWrapper( QgsEditorWidgetWrapper* eww )
 void QgsAttributeForm::createWrappers()
 {
   QList<QWidget*> myWidgets = findChildren<QWidget*>();
-  const QList<QgsField> fields = mLayer->pendingFields().toList();
+  const QList<QgsField> fields = mLayer->fields().toList();
 
   Q_FOREACH ( QWidget* myWidget, myWidgets )
   {

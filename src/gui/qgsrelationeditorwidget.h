@@ -3,7 +3,7 @@
      --------------------------------------
     Date                 : 17.5.2013
     Copyright            : (C) 2013 Matthias Kuhn
-    Email                : matthias dot kuhn at gmx dot ch
+    Email                : matthias at opengis dot ch
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -49,7 +49,7 @@ class GUI_EXPORT QgsRelationEditorWidget : public QgsCollapsibleGroupBox
 
     //! Defines the relation ID (from project relations)
     //! @note use a widget's property to keep compatibility with using basic widget instead of QgsRelationEditorWidget
-    void setQgisRelation( QString qgisRelationId ) { mRelationId = qgisRelationId; }
+    void setQgisRelation( QString qgisRelationId );
     QString qgisRelation() { return mRelationId; }  //property( "qgisRelation" ).toString()
 
     void setRelationFeature( const QgsRelation& relation, const QgsFeature& feature );

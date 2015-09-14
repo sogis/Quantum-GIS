@@ -23,12 +23,6 @@ class QgsAttributeTableModel : QAbstractTableModel
     virtual ~QgsAttributeTableModel();
 
     /**
-     * Loads the layer into the model
-     * Preferably to be called, before basing any other models on this model
-     */
-    virtual void loadLayer();
-
-    /**
      * Returns the number of rows
      * @param parent parent index
      */
@@ -179,6 +173,20 @@ class QgsAttributeTableModel : QAbstractTableModel
      */
     const QgsAttributeEditorContext& editorContext() const;
 
+  public slots:
+
+    /**
+     * Loads the layer into the model
+     * Preferably to be called, before using this model as source for any other proxy model
+     */
+    virtual void loadLayer();
+
+    /** Handles updating the model when the conditional style for a field changes.
+     * @param fieldName name of field whose conditional style has changed
+     * @note added in QGIS 2.12
+     */
+    void fieldConditionalStyleChanged( const QString& fieldName );
+
   signals:
     /**
      * Model has been changed
@@ -198,10 +206,10 @@ class QgsAttributeTableModel : QAbstractTableModel
      */
     virtual void attributeValueChanged( QgsFeatureId fid, int idx, const QVariant &value );
     /**
-     * Launched when a feature has been deleted
-     * @param fid feature id
+     * Launched when eatures have been deleted
+     * @param fids feature ids
      */
-    virtual void featureDeleted( QgsFeatureId fid );
+    virtual void featuresDeleted( QgsFeatureIds fid );
     /**
      * Launched when a feature has been added
      * @param fid feature id

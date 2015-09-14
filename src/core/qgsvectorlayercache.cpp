@@ -4,7 +4,7 @@
   -------------------
          begin                : January 2013
          copyright            : (C) Matthias Kuhn
-         email                : matthias dot kuhn at gmx dot ch
+         email                : matthias at opengis dot ch
 
  ***************************************************************************
  *                                                                         *
@@ -31,11 +31,12 @@ QgsVectorLayerCache::QgsVectorLayerCache( QgsVectorLayer* layer, int cacheSize, 
   connect( mLayer, SIGNAL( layerDeleted() ), SLOT( layerDeleted() ) );
 
   setCacheGeometry( true );
-  setCacheSubsetOfAttributes( mLayer->pendingAllAttributesList() );
+  setCacheSubsetOfAttributes( mLayer->attributeList() );
   setCacheAddedAttributes( true );
 
   connect( mLayer, SIGNAL( attributeDeleted( int ) ), SLOT( attributeDeleted( int ) ) );
-  connect( mLayer, SIGNAL( updatedFields() ), SLOT( updatedFields() ) );
+  connect( mLayer, SIGNAL( updatedFields() ), SLOT( invalidate() ) );
+  connect( mLayer, SIGNAL( dataChanged() ), SLOT( invalidate() ) );
   connect( mLayer, SIGNAL( attributeValueChanged( QgsFeatureId, int, const QVariant& ) ), SLOT( onAttributeValueChanged( QgsFeatureId, int, const QVariant& ) ) );
 }
 
@@ -175,7 +176,7 @@ void QgsVectorLayerCache::requestCompleted( QgsFeatureRequest featureRequest, Qg
   // If a request is too large for the cache don't notify to prevent from indexing incomplete requests
   if ( fids.count() < mCache.size() )
   {
-    foreach ( QgsAbstractCacheIndex* idx, mCacheIndices )
+    Q_FOREACH ( QgsAbstractCacheIndex* idx, mCacheIndices )
     {
       idx->requestCompleted( featureRequest, fids );
     }
@@ -231,9 +232,15 @@ void QgsVectorLayerCache::attributeAdded( int field )
 
 void QgsVectorLayerCache::attributeDeleted( int field )
 {
-  foreach ( QgsFeatureId fid, mCache.keys() )
+  QgsAttributeList attrs = mCachedAttributes;
+  mCachedAttributes.clear();
+
+  Q_FOREACH ( int attr, attrs )
   {
-    mCache[ fid ]->mFeature->deleteAttribute( field );
+    if ( attr < field )
+      mCachedAttributes << attr;
+    else if ( attr > field )
+      mCachedAttributes << attr - 1;
   }
 }
 
@@ -253,9 +260,10 @@ void QgsVectorLayerCache::layerDeleted()
   mLayer = NULL;
 }
 
-void QgsVectorLayerCache::updatedFields()
+void QgsVectorLayerCache::invalidate()
 {
   mCache.clear();
+  emit invalidated();
 }
 
 QgsFeatureIterator QgsVectorLayerCache::getFeatures( const QgsFeatureRequest &featureRequest )
@@ -274,7 +282,7 @@ QgsFeatureIterator QgsVectorLayerCache::getFeatures( const QgsFeatureRequest &fe
     else
     {
       // Check if an index is able to deliver the requested features
-      foreach ( QgsAbstractCacheIndex *idx, mCacheIndices )
+      Q_FOREACH ( QgsAbstractCacheIndex *idx, mCacheIndices )
       {
         if ( idx->getCacheIterator( it, featureRequest ) )
         {
@@ -322,7 +330,7 @@ bool QgsVectorLayerCache::checkInformationCovered( const QgsFeatureRequest& feat
 
   if ( !featureRequest.flags().testFlag( QgsFeatureRequest::SubsetOfAttributes ) )
   {
-    requestedAttributes = mLayer->pendingAllAttributesList();
+    requestedAttributes = mLayer->attributeList();
   }
   else
   {
@@ -330,7 +338,7 @@ bool QgsVectorLayerCache::checkInformationCovered( const QgsFeatureRequest& feat
   }
 
   // Check if we even cache the information requested
-  foreach ( int attr, requestedAttributes )
+  Q_FOREACH ( int attr, requestedAttributes )
   {
     if ( !mCachedAttributes.contains( attr ) )
     {

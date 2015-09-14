@@ -913,6 +913,12 @@ QList<QgsColorRampShader::ColorRampItem> QgsWcsProvider::colorTable( int theBand
   return mColorTables.value( theBandNumber - 1 );
 }
 
+int QgsWcsProvider::colorInterpretation( int bandNo ) const
+{
+  GDALRasterBandH myGdalBand = GDALGetRasterBand( mCachedGdalDataset, bandNo );
+  return colorInterpretationFromGdal( GDALGetRasterColorInterpretation( myGdalBand ) );
+}
+
 
 bool QgsWcsProvider::parseServiceExceptionReportDom( QByteArray const & xml, const QString& wcsVersion, QString& errorTitle, QString& errorText )
 {
@@ -1324,7 +1330,7 @@ QString QgsWcsProvider::metadata()
 
   // Dialog takes too long to open if there are too many coverages (1000 for example)
   int count = 0;
-  foreach ( QgsWcsCoverageSummary c, mCapabilities.coverages() )
+  Q_FOREACH ( const QgsWcsCoverageSummary& c, mCapabilities.coverages() )
   {
     metadata += coverageMetadata( c );
     count++;

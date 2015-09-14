@@ -3,7 +3,7 @@
      --------------------------------------
     Date                 : 3.5.2014
     Copyright            : (C) 2014 Matthias Kuhn
-    Email                : matthias dot kuhn at gmx dot ch
+    Email                : matthias at opengis dot ch
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -163,6 +163,11 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
      * Sets all values to the values of the current feature
      */
     void resetValues();
+
+    /**
+     * reload current feature
+     */
+    void refreshFeature();
 
   private slots:
     void onAttributeChanged( const QVariant& value );

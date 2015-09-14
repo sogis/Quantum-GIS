@@ -3,7 +3,7 @@
      --------------------------------------
     Date                 : 17.5.2013
     Copyright            : (C) 2013 Matthias Kuhn
-    Email                : matthias dot kuhn at gmx dot ch
+    Email                : matthias at opengis dot ch
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -153,6 +153,9 @@ void QgsRelationEditorWidget::setRelationFeature( const QgsRelation& relation, c
     mToggleEditingButton->setEnabled( false );
   }
 
+  setObjectName( mRelation.name() );
+  loadState();
+
   // If not yet initialized, it is not (yet) visible, so we don't load it to be faster (lazy loading)
   // If it is already initialized, it has been set visible before and the currently shown feature is changing
   // and the widget needs updating
@@ -176,6 +179,14 @@ void QgsRelationEditorWidget::setViewMode( QgsDualView::ViewMode mode )
   mViewMode = mode;
 }
 
+void QgsRelationEditorWidget::setQgisRelation( QString qgisRelationId )
+{
+  mRelationId = qgisRelationId;
+  // by setting the object name appropriately we can properly save the collapsed state
+  setObjectName( qgisRelationId );
+  loadState();
+}
+
 void QgsRelationEditorWidget::referencingLayerEditingToggled()
 {
   bool editable = false;
@@ -196,9 +207,9 @@ void QgsRelationEditorWidget::addFeature()
 {
   QgsAttributeMap keyAttrs;
 
-  QgsFields fields = mRelation.referencingLayer()->pendingFields();
+  QgsFields fields = mRelation.referencingLayer()->fields();
 
-  Q_FOREACH ( QgsRelation::FieldPair fieldPair, mRelation.fieldPairs() )
+  Q_FOREACH ( const QgsRelation::FieldPair& fieldPair, mRelation.fieldPairs() )
   {
     keyAttrs.insert( fields.indexFromName( fieldPair.referencingField() ), mFeature.attribute( fieldPair.referencedField() ) );
   }
@@ -213,7 +224,7 @@ void QgsRelationEditorWidget::linkFeature()
   if ( selectionDlg.exec() )
   {
     QMap<int, QVariant> keys;
-    Q_FOREACH ( const QgsRelation::FieldPair fieldPair, mRelation.fieldPairs() )
+    Q_FOREACH ( const QgsRelation::FieldPair& fieldPair, mRelation.fieldPairs() )
     {
       int idx = mRelation.referencingLayer()->fieldNameIndex( fieldPair.referencingField() );
       QVariant val = mFeature.attribute( fieldPair.referencedField() );
@@ -243,7 +254,7 @@ void QgsRelationEditorWidget::deleteFeature()
 void QgsRelationEditorWidget::unlinkFeature()
 {
   QMap<int, QgsField> keyFields;
-  Q_FOREACH ( const QgsRelation::FieldPair fieldPair, mRelation.fieldPairs() )
+  Q_FOREACH ( const QgsRelation::FieldPair& fieldPair, mRelation.fieldPairs() )
   {
     int idx = mRelation.referencingLayer()->fieldNameIndex( fieldPair.referencingField() );
     if ( idx < 0 )
@@ -251,7 +262,7 @@ void QgsRelationEditorWidget::unlinkFeature()
       QgsDebugMsg( QString( "referencing field %1 not found" ).arg( fieldPair.referencingField() ) );
       return;
     }
-    QgsField fld = mRelation.referencingLayer()->pendingFields().at( idx );
+    QgsField fld = mRelation.referencingLayer()->fields().at( idx );
     keyFields.insert( idx, fld );
   }
 

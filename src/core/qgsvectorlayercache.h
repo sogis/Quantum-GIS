@@ -4,7 +4,7 @@
   -------------------
          begin                : January 2013
          copyright            : (C) Matthias Kuhn
-         email                : matthias dot kuhn at gmx dot ch
+         email                : matthias at opengis dot ch
 
  ***************************************************************************
  *                                                                         *
@@ -256,6 +256,11 @@ class CORE_EXPORT QgsVectorLayerCache : public QObject
      */
     void featureAdded( QgsFeatureId fid );
 
+    /**
+     * The cache has been invalidated and cleared.
+     */
+    void invalidated();
+
   private slots:
     void onAttributeValueChanged( QgsFeatureId fid, int field, const QVariant& value );
     void featureDeleted( QgsFeatureId fid );
@@ -264,7 +269,7 @@ class CORE_EXPORT QgsVectorLayerCache : public QObject
     void attributeDeleted( int field );
     void geometryChanged( QgsFeatureId fid, QgsGeometry& geom );
     void layerDeleted();
-    void updatedFields();
+    void invalidate();
 
   private:
 

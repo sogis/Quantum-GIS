@@ -54,6 +54,8 @@ class QgsGrassMapsetItem : public QgsDirectoryItem
   public:
     QgsGrassMapsetItem( QgsDataItem* parent, QString dirPath, QString path );
 
+    virtual void setState( State state ) override;
+
     QIcon icon() override { return QgsDataItem::icon(); }
 
     QVector<QgsDataItem*> createChildren() override;
@@ -63,11 +65,14 @@ class QgsGrassMapsetItem : public QgsDirectoryItem
 
   public slots:
     void onImportFinished( QgsGrassImport* import );
+    void openMapset();
 
   private:
+    bool objectInImports( QgsGrassObject grassObject );
     //void showImportError(const QString& error);
     QString mLocation;
     QString mGisdbase;
+    QFileSystemWatcher *mMapsetFileSystemWatcher;
     // running imports
     static QList<QgsGrassImport*> mImports;
 };
@@ -95,6 +100,7 @@ class QgsGrassObjectItem : public QgsLayerItem, public QgsGrassObjectItemBase
                         bool showObjectActions = true );
 
     virtual QList<QAction*> actions() override;
+    virtual bool equal( const QgsDataItem *other ) override;
 
   public slots:
     void renameGrassObject();
@@ -112,7 +118,8 @@ class QgsGrassVectorItem : public QgsDataCollectionItem, public QgsGrassObjectIt
 {
     Q_OBJECT
   public:
-    QgsGrassVectorItem( QgsDataItem* parent, QgsGrassObject grassObject, QString path );
+    // labelName - name to be displayed in tree if it should be different from grassObject.name() (e.g. invalid vector)
+    QgsGrassVectorItem( QgsDataItem* parent, QgsGrassObject grassObject, QString path, QString labelName = QString::null, bool valid = true );
     ~QgsGrassVectorItem() {}
 
     virtual QList<QAction*> actions() override;
@@ -123,6 +130,7 @@ class QgsGrassVectorItem : public QgsDataCollectionItem, public QgsGrassObjectIt
 
   private:
     QgsGrassObject mVector;
+    bool mValid;
 };
 
 class QgsGrassVectorLayerItem : public QgsGrassObjectItem
@@ -133,10 +141,7 @@ class QgsGrassVectorLayerItem : public QgsGrassObjectItem
                              QString path, QString uri, LayerType layerType, bool singleLayer );
 
     QString layerName() const override;
-    //virtual QList<QAction*> actions() override;
-
-  public slots:
-    //void deleteMap();
+    virtual bool equal( const QgsDataItem *other ) override;
 
   private:
     // layer from single layer vector map (cannot have delete action)
@@ -151,6 +156,7 @@ class QgsGrassRasterItem : public QgsGrassObjectItem
                         QString path, QString uri, bool isExternal );
 
     virtual QIcon icon() override;
+    virtual bool equal( const QgsDataItem *other ) override;
 
   private:
     // is external created by r.external
@@ -167,30 +173,6 @@ class QgsGrassGroupItem : public QgsGrassObjectItem
 
     virtual QIcon icon() override;
 
-};
-
-// icon movie
-class QgsGrassImportItemIcon : public QObject
-{
-    Q_OBJECT
-  public:
-    QgsGrassImportItemIcon( QObject *parent );
-
-    QIcon icon() { return mIcon; }
-    void addListener();
-    void removeListener();
-
-  public slots:
-    void onFrameChanged();
-
-  signals:
-    void frameChanged();
-
-  private:
-    void resetMovie();
-    int mCount;
-    QMovie * mMovie;
-    QIcon mIcon;
 };
 
 // item representing a layer being imported
@@ -217,7 +199,7 @@ class QgsGrassImportItem : public QgsDataItem, public QgsGrassObjectItemBase
     QgsGrassImport* mImport;
 
   private:
-    static QgsGrassImportItemIcon *mImportIcon;
+    static QgsAnimatedIcon *mImportIcon;
 };
 
 #endif // QGSGRASSPROVIDERMODULE_H

@@ -1,5 +1,7 @@
 <RCC>
     <qresource prefix="/images/themes/default/grass">
+        <file alias="closebutton.png">themes/default/closebutton.png</file>
+        <file alias="darkclosebutton.png">themes/default/darkclosebutton.png</file>
         <file alias="grass_add_vertex.png">themes/default/grass_add_vertex.png</file>
         <file alias="grass_clear_input.png">themes/default/grass_clear_input.png</file>
         <file alias="grass_close_edit.png">themes/default/grass_close_edit.png</file>
@@ -19,6 +21,7 @@
         <file alias="grass_new_point.png">themes/default/grass_new_point.png</file>
         <file alias="grass_new_vector_layer.png">themes/default/grass_new_vector_layer.png</file>
         <file alias="grass_open_mapset.png">themes/default/grass_open_mapset.png</file>
+        <file alias="grass_options_region.png">themes/default/grass_options_region.png</file>
         <file alias="grass_region_edit.png">themes/default/grass_region_edit.png</file>
         <file alias="grass_region.png">themes/default/grass_region.png</file>
         <file alias="grass_set_region.png">themes/default/grass_set_region.png</file>
